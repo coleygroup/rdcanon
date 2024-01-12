@@ -285,6 +285,7 @@ def test_against_random_permutations(in_smarts, n_perms=100):
 
 
 def test_random_permutations():
+    # print(os.path.dirname(os.path.abspath(__file__)))
     path = os.path.dirname(os.path.abspath(__file__)) + "/testing_data/noncanon_efg_templates_20240108.xlsx"
     noncanon_templates = pd.read_excel(path)
     for t in noncanon_templates["noncanon_efg_templates"]:
@@ -506,15 +507,10 @@ def check_validation(noncanon_output, canon_output):
 def run_validate_recursive_test():
     path = os.path.dirname(os.path.abspath(__file__)) + "/testing_data/noncanon_efg_templates_20240108.xlsx"
     noncanon_templates = pd.read_excel(path)
-    path = os.path.dirname(os.path.abspath(__file__)) + "/testing_data/drugbank_all_structures_20231226.sdf"
-    drugbank = Chem.SDMolSupplier(path)
-    tdb = []
-    for sm in drugbank:
-        if sm is not None:
-            tdb.append(Chem.MolToSmiles(sm))
-        if len(tdb) > 1000: break
+    path = os.path.dirname(os.path.abspath(__file__)) + "/testing_data/drugbank_smiles_1000.xlsx"
+    tdb = pd.read_excel(path)
 
-    nc, c = validate_recursive(noncanon_templates["noncanon_efg_templates"], tdb, 1)
+    nc, c = validate_recursive(noncanon_templates["noncanon_efg_templates"], tdb["smiles"], 1)
     assert check_validation(nc, c)
 
 
