@@ -11,7 +11,7 @@ rdcanon is a package designed for canonicalizing SMARTS and Reaction SMARTS temp
 1. Create or activate a virtual environment.
 2. Clone the repository.
 3. Install the package with the command:
->pip install -e rdcanon
+>pip install -e rdcanon2024
 
 Note: rdkit will be installed automatically if it's not already present in the environment.
 
@@ -19,7 +19,7 @@ Note: rdkit will be installed automatically if it's not already present in the e
 ### Sanitizing Individual SMARTS
 To sanitize individual SMARTS:
 ```python
-from rofls import canon_smarts 
+from rdcanon import canon_smarts 
 
 test_smarts = [
  "[$([NX3H,NX4H2+]),$([NX3](C)(C)(C))]1[CX4H]([CH2][CH2][CH2]1)[CX3](=[OX1])[OX2H,OX1-,N]",
