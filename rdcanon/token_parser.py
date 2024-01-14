@@ -47,8 +47,6 @@ bond_value_map = {  "UNSPECIFIED": 1000,
                     "ZERO": 4
 }
 
-
-
 def hash_smarts(in_smarts, in_prims, func="sha256"):
     if func == 'sha256':
         smarts_bytes = in_smarts.encode()
@@ -78,16 +76,11 @@ prims1["*"] = 10e64
 prims2["*"] = 10e64
 prims3["*"] = 10e64
 prims4["*"] = 10e64
-# for k in prims1:
-#     # print(k, prims[k])
-#     prims1[k] = prims1[k] + hash_smarts(k, {})/1e78
-#     prims2[k] = prims2[k] + hash_smarts(k, {})/1e78
-#     if k not in prims3:
-#         prims3[k] = prims2[k]
-#     else:
-#         prims3[k] = prims3[k] + hash_smarts(k, {})/1e78
-#     # print(k, prims[k])
 
+for k in prims1: prims1[k] = prims1[k] + hash_smarts(k, {})/1e78
+for k in prims2: prims2[k] = prims2[k] + hash_smarts(k, {})/1e78
+for k in prims3: prims3[k] = prims3[k] + hash_smarts(k, {})/1e78
+for k in prims4: prims4[k] = prims4[k] + hash_smarts(k, {})/1e78
 
 labels = ["!", \
           "*", "a", "A", "@", "@@", \
@@ -95,6 +88,13 @@ labels = ["!", \
           "Se", "Si", "Sn", "As", "Te", "Pb", "Zn", "Cu", "Fe", "Mg", "Na", "Ca", "Al", \
           "K", "Li", "Mn", "Zr", "Co", "Ni", "Cd", "Ag", "Au", "Pt", "Pd", "Ru", "Rh", \
           "Ir", "Ti", "V", "W", "Mo", "Hg", "Tl", "Bi", "Ba", "Sr", "Cs", "Rb", "Be", "se", "te"]
+
+ATOMS = [ "a", "A",
+          "C", "N", "O", "o", "c", "n", "s", "S", "P", "p", "B", "b", "F", "I", "Cl", "Br", \
+          "Se", "Si", "Sn", "As", "Te", "Pb", "Zn", "Cu", "Fe", "Mg", "Na", "Ca", "Al", \
+          "K", "Li", "Mn", "Zr", "Co", "Ni", "Cd", "Ag", "Au", "Pt", "Pd", "Ru", "Rh", \
+          "Ir", "Ti", "V", "W", "Mo", "Hg", "Tl", "Bi", "Ba", "Sr", "Cs", "Rb", "Be", "se", "te"]
+
 
 class SMARTSTransformer(Transformer):
     def start(self, args):
@@ -806,7 +806,9 @@ def recursive_compare(list1, list2):
     return (len(list1) > len(list2)) - (len(list1) < len(list2))
 
 
-def custom_key2(item1, item2):    
+def custom_key2(item1t, item2t):    
+    item1, tiebreaker1 = item1t
+    item2, tiebreaker2 = item2t
     return recursive_compare(item1, item2)
 
 
@@ -815,6 +817,11 @@ def custom_key(item1t, item2t):
     item2, tiebreaker2 = item2t
     return recursive_compare(item1, item2)
 
+
+def swapPositions(list, pos1, pos2):
+     
+    list[pos1], list[pos2] = list[pos2], list[pos1]
+    return list
 
 def order_token_canon(in_smarts_token="[!a@H&D2;#7,#6;H;a-3;#7,!O,!#8&!O;#7,!O,!#8&!O++;*;H0]", atom_map=None, embedding="drugbank"):
     # print(in_smarts_token)
@@ -874,6 +881,7 @@ def order_token_canon(in_smarts_token="[!a@H&D2;#7,#6;H;a-3;#7,!O,!#8&!O;#7,!O,!
     stack = deque()
     stack.append(0)
 
+    weights_in_order = []
     been_sorted = []
     while stack:
         node = stack.popleft()
@@ -891,7 +899,11 @@ def order_token_canon(in_smarts_token="[!a@H&D2;#7,#6;H;a-3;#7,!O,!#8&!O;#7,!O,!
                 recurse = True
                 break
             else:
-                these_weights.append(dg.nodes[adj]['weights'])
+                if "text" in dg.nodes[adj]:
+                    txt = dg.nodes[adj]["text"]
+                else:
+                    txt = None
+                these_weights.append((dg.nodes[adj]['weights'],txt))
 
         if not recurse:
             been_sorted.append(node)
@@ -910,53 +922,82 @@ def order_token_canon(in_smarts_token="[!a@H&D2;#7,#6;H;a-3;#7,!O,!#8&!O;#7,!O,!
                 # dg.nodes[node]['weight'] = np.max(these_weights)
                 these_weights = sorted(these_weights, key=cmp_to_key(custom_key2), reverse=True)
                 dg.nodes[node]['weights'] = these_weights
+
+
+
+            # print(these_weights)
+            this_text = [r[1] for r in these_weights]
+            first_atom_index = 0
+            for idx, txt in enumerate(this_text):
+                if txt in ATOMS:
+                    first_atom_index = idx
+                    break
+
+
+            # print(this_text, 0, first_atom_index)
+            this_text = swapPositions(this_text, 0, first_atom_index)
+            dg.nodes[node]['weights'] = swapPositions(dg.nodes[node]['weights'], 0, first_atom_index)
+            # if these_weights[0][1][0] == "-" or these_weights[0][1][0] == "+":
+            #     dg.nodes[node]['weights'] = these_weights[1:]
+            #     dg.nodes[node]['weights'].insert(1, these_weights[0])
+            #     this_text = [r[1] for r in these_weights[1:]]
+            #     this_text.insert(1, these_weights[0][1])
+
+            op = dg.nodes[node]['label']
+
+            dg.nodes[node]['text'] = op.join(this_text)
+            weights_in_order.append(these_weights)
+
+                # print(these_weights)
+
             # print("ordered", node, dg.nodes[node]['label'], these_weights)
             # print()
 
-    stack = deque()
-    stack.append(0)
+    # stack = deque()
+    # stack.append(0)
 
-    weights_in_order = []
+    # weights_in_order = []
 
-    while stack:
-        n_in = stack.popleft()
-        node = n_in
+    # while stack:
+    #     n_in = stack.popleft()
+    #     node = n_in
 
-        weights = []
-        # print(node, dg.nodes[node]['label'])
-        for neighbor in dg.in_edges(node):
-            adj = neighbor[0]
-            # print(dg.nodes[adj]['weights'])
-            weights.append((dg.nodes[adj]['weights'], adj))
-        # print(weights)
-        op = dg.nodes[node]['label']
-        if op == ";":
-            weights = sorted(weights, key=cmp_to_key(custom_key))
-        elif op == ",":
-            weights = sorted(weights, key=cmp_to_key(custom_key), reverse=True)
-        elif op == "&":
-            weights = sorted(weights, key=cmp_to_key(custom_key))
-        # print(weights)
+    #     weights = []
+    #     # print(node, dg.nodes[node]['label'])
+    #     for neighbor in dg.in_edges(node):
+    #         adj = neighbor[0]
+    #         # print(dg.nodes[adj]['weights'])
+    #         weights.append((dg.nodes[adj]['weights'], adj))
+    #     # print(weights)
+    #     op = dg.nodes[node]['label']
+    #     if op == ";":
+    #         weights = sorted(weights, key=cmp_to_key(custom_key))
+    #     elif op == ",":
+    #         weights = sorted(weights, key=cmp_to_key(custom_key), reverse=True)
+    #     elif op == "&":
+    #         weights = sorted(weights, key=cmp_to_key(custom_key))
 
-        recurse = False
-        this_text = []
-        these_weights = []
-        for w in weights:
-            adj = w[1]
-            if 'text' not in dg.nodes[adj]:
-                stack.append(adj)
-                stack.append(node)
-                recurse = True
-                break
-            else:
-                this_text.append(dg.nodes[adj]['text'])
-                these_weights.append(dg.nodes[adj]['weights'])
-        if not recurse:
-            # print("writing", node, dg.nodes[node]['label'], this_text)
-            op = dg.nodes[node]['label']
-            # dg.nodes[node]['weights'] = weights[0]
-            dg.nodes[node]['text'] = op.join(this_text)
-            weights_in_order.append(these_weights)
+    #     # print(weights)
+
+    #     recurse = False
+    #     this_text = []
+    #     these_weights = []
+    #     for w in weights:
+    #         adj = w[1]
+    #         if 'text' not in dg.nodes[adj]:
+    #             stack.append(adj)
+    #             stack.append(node)
+    #             recurse = True
+    #             break
+    #         else:
+    #             this_text.append(dg.nodes[adj]['text'])
+    #             these_weights.append(dg.nodes[adj]['weights'])
+    #     if not recurse:
+    #         # print("writing", node, dg.nodes[node]['label'], this_text)
+    #         op = dg.nodes[node]['label']
+    #         # dg.nodes[node]['weights'] = weights[0]
+    #         dg.nodes[node]['text'] = op.join(this_text)
+    #         weights_in_order.append(these_weights)
 
     # print(dg.nodes[0]['text'])
 

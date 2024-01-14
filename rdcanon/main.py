@@ -207,10 +207,22 @@ class Graph:
         if self.v:
             print("enumerated paths")
 
+
+        node_data = [x.serialized_score for x in self.nodes]
+
+        n = min(node_data, key=cmp_to_key(recursive_compare))
+        top_nodes = []
+        for i, nd in enumerate(node_data):
+            if nd == n:
+                top_nodes.append(i)
+
+
         poss_paths = []
         all_paths_scored = []
         path_idx = 0
-        for h in self.nodes:
+        for idx,h in enumerate(self.nodes):
+            if idx not in top_nodes:
+                continue
             all_paths = self.find_hamiltonian_paths_iterative(h.index)
             for r in all_paths:
                 path_ar = []
