@@ -3,7 +3,6 @@ from rdkit.Chem import AllChem
 import re
 from rdcanon.token_parser import order_token_canon, recursive_compare
 import rdkit
-import numpy as np
 from collections import deque
 from rdcanon.askcos_prims import prims as prims1
 import random
@@ -207,7 +206,6 @@ class Graph:
         if self.v:
             print("enumerated paths")
 
-
         node_data = [x.serialized_score for x in self.nodes]
 
         n = min(node_data, key=cmp_to_key(recursive_compare))
@@ -216,11 +214,10 @@ class Graph:
             if nd == n:
                 top_nodes.append(i)
 
-
         poss_paths = []
         all_paths_scored = []
         path_idx = 0
-        for idx,h in enumerate(self.nodes):
+        for idx, h in enumerate(self.nodes):
             if idx not in top_nodes:
                 continue
             all_paths = self.find_hamiltonian_paths_iterative(h.index)
@@ -315,7 +312,7 @@ class Graph:
                 (
                     self.regen_molecule(top_score["path"], False),
                     self.regen_molecule(top_score["path"], mapping),
-                    top_score["path_scores"]
+                    top_score["path_scores"],
                 )
             )
 
@@ -331,7 +328,6 @@ class Graph:
         new_map_to_old_map = {}
         atom_map_number_to_true_atom_map_number = {}
         for node, bond in dfs:
-            # print(node)
             sm = node.data["smarts"]
             atom_map = re.findall(r":\d+", sm)
             if not mapping:
@@ -615,25 +611,19 @@ def get_sanitized_reaction_smarts(sm2, mapping, embedding):
             }
         )
 
-    reactants_sort = sorted(
-        reactants, key=cmp_to_key(custom_key2)
-    )
+    reactants_sort = sorted(reactants, key=cmp_to_key(custom_key2))
 
     san_smarts_out = ".".join([r["san_smarts"] for r in reactants_sort])
 
     if len(agents) > 0:
         san_smarts_out = san_smarts_out + ">"
-        agents_sort = sorted(
-            agents, key=cmp_to_key(custom_key2)
-        )
+        agents_sort = sorted(agents, key=cmp_to_key(custom_key2))
         san_smarts_out = san_smarts_out + ".".join(
             [r["san_smarts"] for r in agents_sort]
         )
 
     san_smarts_out = san_smarts_out + ">>"
-    products_sort = sorted(
-        products, key=cmp_to_key(custom_key2)
-    )
+    products_sort = sorted(products, key=cmp_to_key(custom_key2))
     san_smarts_out = san_smarts_out + ".".join([r["san_smarts"] for r in products_sort])
 
     # print(sm2)
@@ -643,6 +633,17 @@ def get_sanitized_reaction_smarts(sm2, mapping, embedding):
 
 
 def random_smarts(smarts="[Cl][C][C][C][N][C][C][C][Br]", mapping=False):
+    """
+    Generate a random molecule based on the given SMARTS pattern.
+
+    Args:
+        smarts (str): The SMARTS pattern representing the molecule structure. Default is "[Cl][C][C][C][N][C][C][C][Br]".
+        mapping (bool): Whether to generate a mapping of atom indices between the original and recreated molecule. Default is False.
+
+    Returns:
+        str: The recreated SMARTS pattern.
+
+    """
     g = Graph()
 
     prims = {}
@@ -655,7 +656,7 @@ def random_smarts(smarts="[Cl][C][C][C][N][C][C][C][Br]", mapping=False):
 
 
 def canon_smarts(
-    smarts, mapping=False, embedding="askcos", return_score=False, v=False
+    smarts, mapping=False, embedding="drugbank", return_score=False, v=False
 ):
     """
     Canonicalizes a SMARTS pattern.
@@ -663,11 +664,13 @@ def canon_smarts(
     Args:
         smarts (str): The input SMARTS pattern to be canonicalized.
         mapping (bool, optional): Whether to return the atom mapping. Defaults to False.
+        embedding (str, optional): The query primitive frequency dictionary to use. Defaults to "drugbank".
+        return_score (bool, optional): Whether to return the top score. Defaults to False.
+        v (bool, optional): Whether to enable verbose mode. Defaults to False.
 
     Returns:
-        str: The canonicalized SMARTS pattern.
+        str or tuple: The canonicalized SMARTS pattern. If `return_score` is True, a tuple containing the canonicalized SMARTS pattern and the top score is returned.
     """
-
     g = Graph(v)
     g.graph_from_smarts(smarts, embedding)
     out = g.recreate_molecule(mapping)
@@ -676,10 +679,21 @@ def canon_smarts(
     return out
 
 
-def debug(smarts, mapping=False, embedding="askcos", return_score=False):
+def debug(smarts, mapping=False, embedding="drugbank", return_score=False):
     canon_smarts(smarts, mapping, embedding, return_score, True)
 
 
-def canon_reaction_smarts(smarts, mapping=False, embedding="askcos"):
+def canon_reaction_smarts(smarts, mapping=False, embedding="drugbank"):
+    """
+    Canonicalizes a reaction SMARTS string.
+
+    Args:
+        smarts (str): The reaction SMARTS string to be canonicalized.
+        mapping (bool, optional): Whether to include atom mapping in the canonicalization. Defaults to False.
+        embedding (str, optional): The embedding to use for the canonicalization. Defaults to "drugbank".
+
+    Returns:
+        str: The canonicalized reaction SMARTS string.
+    """
     san_smarts_out = get_sanitized_reaction_smarts(smarts, mapping, embedding)
     return san_smarts_out
