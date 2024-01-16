@@ -6,6 +6,16 @@ rdcanon is a package designed for canonicalizing SMARTS and Reaction SMARTS temp
 ## Installation
 ### Prerequisites
 - Ensure you have rdkit installed (version > 2023.9.2).
+- The following packages will be installed:
+        'rdkit > 2023.09.1',
+        'matplotlib',
+        'lark',
+        'numpy',
+        'networkx',
+        'scikit-learn', (optional, for kde generation)
+        'ipykernel',
+        'pandas',
+        'openpyxl'
 
 ### Steps
 1. Create or activate a virtual environment.
@@ -13,7 +23,6 @@ rdcanon is a package designed for canonicalizing SMARTS and Reaction SMARTS temp
 3. Install the package with the command:
 >pip install -e rdcanon2024
 
-Note: rdkit will be installed automatically if it's not already present in the environment.
 
 ## Usage
 ### Sanitizing Individual SMARTS
@@ -40,3 +49,28 @@ For sanitizing reaction SMARTS:
 from rdcanon import canon_reaction_smarts
 ```
 
+### Unit Testing
+To run all unit tests:
+>python rdcanon_tests.py
+
+
+### Manuscript Figures and Tests
+All data can be found in the manuscripts/data directory.
+
+To create the bar charts of Figure 1, use the notebook within the manuscript directory named "prim_frequencies.ipynb". 
+
+To run the subgraph isomorphism experiments of Figure 3, use the notebook within the manuscript directory named "generate_plots_substruct_match.ipynb". 
+
+To run the template application experiments of Figure 4, use the notebook within the manuscript directory named "gen_plots_run_reactants_20240104.ipynb". 
+
+To run the retrosynthetic analysis experiments of Figure 5, use the notebook within the manuscript directory named "gen_retrosim_plots_20240105.ipynb". 
+
+
+### RDCanon Files
+The main workflow consists of two files, main.py and token_parser.py. The main.py file calls token_parser.py to parse and score atomic queries.
+
+The files askcos_prims.py, drugbank_prims_with_nots.py, np_prims.py, and pubchem_prims.py are 4 query primitive frequency dictonaries, which are used for embedding leaf nodes in query trees.
+
+The rdcanon_tests.py file contains all of the test cases using the abseil interface.
+
+Finally, utils.py contains some helper functions for testing and plotting.
