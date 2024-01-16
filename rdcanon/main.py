@@ -315,11 +315,12 @@ class Graph:
                 (
                     self.regen_molecule(top_score["path"], False),
                     self.regen_molecule(top_score["path"], mapping),
+                    top_score["path_scores"]
                 )
             )
 
         sms.sort(key=lambda x: x[0])
-        self.top_score = sms[0][0]
+        self.top_score = sms[0][2]
         return sms[0][1]
 
     def regen_molecule(self, dfs, mapping):
@@ -555,11 +556,10 @@ def get_sanitized_reaction_smarts(sm2, mapping, embedding):
         if "." in r_sm:
             san_sm_out = "(" + san_sm_out + ")"
 
-        ts = tss[0]
         # print(r_sm, san_sm_out, ts)
         reactants.append(
             {
-                "score": tss,
+                "path_scores": tss,
                 "original_smarts": r_sm,
                 "san_smarts": san_sm_out,
             }
@@ -582,11 +582,9 @@ def get_sanitized_reaction_smarts(sm2, mapping, embedding):
         if "." in r_sm:
             san_sm_out = "(" + san_sm_out + ")"
 
-        ts = tss[0]
-
         agents.append(
             {
-                "score": tss,
+                "path_scores": tss,
                 "original_smarts": r_sm,
                 "san_smarts": san_sm_out,
             }
@@ -609,24 +607,24 @@ def get_sanitized_reaction_smarts(sm2, mapping, embedding):
         if "." in r_sm:
             san_sm_out = "(" + san_sm_out + ")"
 
-        ts = tss[0]
         products.append(
             {
-                "score": tss,
+                "path_scores": tss,
                 "original_smarts": r_sm,
                 "san_smarts": san_sm_out,
             }
         )
 
     reactants_sort = sorted(
-        reactants, key=cmp_to_key(custom_key3)
+        reactants, key=cmp_to_key(custom_key2)
     )
+
     san_smarts_out = ".".join([r["san_smarts"] for r in reactants_sort])
 
     if len(agents) > 0:
         san_smarts_out = san_smarts_out + ">"
         agents_sort = sorted(
-            agents, key=cmp_to_key(custom_key3)
+            agents, key=cmp_to_key(custom_key2)
         )
         san_smarts_out = san_smarts_out + ".".join(
             [r["san_smarts"] for r in agents_sort]
@@ -634,7 +632,7 @@ def get_sanitized_reaction_smarts(sm2, mapping, embedding):
 
     san_smarts_out = san_smarts_out + ">>"
     products_sort = sorted(
-        products, key=cmp_to_key(custom_key3)
+        products, key=cmp_to_key(custom_key2)
     )
     san_smarts_out = san_smarts_out + ".".join([r["san_smarts"] for r in products_sort])
 

@@ -907,6 +907,18 @@ def order_token_canon(in_smarts_token="[!a@H&D2;#7,#6;H;a-3;#7,!O,!#8&!O;#7,!O,!
 
         if not recurse:
             been_sorted.append(node)
+
+            if op == "&":
+                or_found = False
+                for neighbor in dg.out_edges(node):
+                    adj = neighbor[1]
+                    if dg.nodes[adj]['label'] == ",":
+                        or_found = True
+                        break
+                if not or_found:
+                    op = ";"
+                    dg.nodes[node]['label'] = ";"
+
             # print("ordering", node, dg.nodes[node]['label'], these_weights)
             if op == ";" or op == "&":
                 # dg.nodes[node]['weight'] = np.min(these_weights)
@@ -936,12 +948,14 @@ def order_token_canon(in_smarts_token="[!a@H&D2;#7,#6;H;a-3;#7,!O,!#8&!O;#7,!O,!
 
             # print(this_text, 0, first_atom_index)
             this_text = swapPositions(this_text, 0, first_atom_index)
+            # print(this_text, 0, first_atom_index)
             dg.nodes[node]['weights'] = swapPositions(dg.nodes[node]['weights'], 0, first_atom_index)
             # if these_weights[0][1][0] == "-" or these_weights[0][1][0] == "+":
             #     dg.nodes[node]['weights'] = these_weights[1:]
             #     dg.nodes[node]['weights'].insert(1, these_weights[0])
             #     this_text = [r[1] for r in these_weights[1:]]
             #     this_text.insert(1, these_weights[0][1])
+
 
             op = dg.nodes[node]['label']
 
