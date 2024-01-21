@@ -49,7 +49,7 @@ def compare_reaction_outputs(reactant_objs_in, template_list, canon_template_lis
 
 
 def compare_products(reaction_template, reactants_in):
-    canon_rxn1 = canon_reaction_smarts(reaction_template, True)
+    canon_rxn1 = canon_reaction_smarts(reaction_template, True, "drugbank", True)
     rxn = AllChem.ReactionFromSmarts(reaction_template)
     rxn_canon = AllChem.ReactionFromSmarts(canon_rxn1)
 

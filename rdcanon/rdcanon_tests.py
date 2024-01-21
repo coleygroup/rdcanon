@@ -46,19 +46,19 @@ class TestRegularSmarts(absltest.TestCase):
         results.append(canon_smarts(s_test5))
         results.append(canon_smarts(s_test6))
         results.append(canon_smarts(s_test7))
-        assert len(set(results)) == 1
+        for i in range(len(results)):
+            for j in range(len(results)):
+                self.assertEqual(results[i], results[j])
 
     def test_atom_invariant_permutations(self):
         s_test1 = "[Br;!Cl;H10;X10][c;H0]1[c;H0][c;H0][c;H0][c;H0][c;H0]1"
         s_test2 = "[!Cl;H10;X10;Br][c;H0]1[c;H0][c;H0][c;H0][c;H0][c;H0]1"
         s_test3 = "[H10;X10;Br;!Cl][c;H0]1[c;H0][c;H0][c;H0][c;H0][c;H0]1"
         s_test4 = "[X10;Br;!Cl;H10][c;H0]1[c;H0][c;H0][c;H0][c;H0][c;H0]1"
-        assert (
-            canon_smarts(s_test1)
-            == canon_smarts(s_test2)
-            == canon_smarts(s_test3)
-            == canon_smarts(s_test4)
-        )
+
+        self.assertEqual(canon_smarts(s_test1), canon_smarts(s_test2))
+        self.assertEqual(canon_smarts(s_test1), canon_smarts(s_test3))
+        self.assertEqual(canon_smarts(s_test1), canon_smarts(s_test4))
 
         s_test1 = "[Br;Cl,B,C]"
         s_test2 = "[Br;B,C,Cl]"
@@ -66,19 +66,17 @@ class TestRegularSmarts(absltest.TestCase):
         s_test4 = "[Cl,B,C;Br]"
         s_test5 = "[B,C,Cl;Br]"
         s_test6 = "[C,Cl,B;Br]"
-        assert (
-            canon_smarts(s_test1)
-            == canon_smarts(s_test2)
-            == canon_smarts(s_test3)
-            == canon_smarts(s_test4)
-            == canon_smarts(s_test5)
-            == canon_smarts(s_test6)
-        )
+
+        self.assertEqual(canon_smarts(s_test1), canon_smarts(s_test2))
+        self.assertEqual(canon_smarts(s_test1), canon_smarts(s_test3))
+        self.assertEqual(canon_smarts(s_test1), canon_smarts(s_test4))
+        self.assertEqual(canon_smarts(s_test1), canon_smarts(s_test5))
+        self.assertEqual(canon_smarts(s_test1), canon_smarts(s_test6))
 
     def test_stereochemistry_permutations(self):
         s_test1 = "[C][C@][O]"
         s_test2 = "[C][C@@][O]"
-        assert canon_smarts(s_test1) != canon_smarts(s_test2)
+        self.assertFalse(canon_smarts(s_test1) == canon_smarts(s_test2))
 
         isomers = [
             "I-[C@@](-Br)(-Cl)-C-[C@](-P)(-O)-B",
@@ -98,7 +96,7 @@ class TestRegularSmarts(absltest.TestCase):
             "B-[C@](-P)(-C-[C@](-Br)(-Cl)-I)-O",
             "C(-[C@@](-Cl)(-Br)-I)-[C@](-O)(-B)-P",
         ]
-        assert len(set([canon_smarts(s) for s in isomers])) == 1
+        self.assertTrue(len(set([canon_smarts(s) for s in isomers])) == 1)
 
         isomers = [
             "C(=C/O)\C-C(=C-[C@@](-Br)(-Cl)-[H1@&C](-B)(-P)-O)-C",
@@ -109,7 +107,7 @@ class TestRegularSmarts(absltest.TestCase):
             "C(=C-[C@](-Br)(-[H1@@&C](-B)(-O)-P)-Cl)(-C/C=C\O)-C",
             "B-[H1@&C](-[C@](-Br)(-Cl)-C=C(-C)-C/C=C\O)(-O)-P",
         ]
-        assert len(set([canon_smarts(s) for s in isomers])) == 1
+        self.assertTrue(len(set([canon_smarts(s) for s in isomers])) == 1)
 
     def test_symmetric_molecules(self):
         s_test1 = "[Cl][C][C][C][C][C][C][N][C][C][C][C][C][C][Br]"
@@ -158,14 +156,14 @@ class TestReactionSmarts(absltest.TestCase):
             for x in run_reactants_experiments["reaction_smarts"]
         ]
         canon_extracted_smarts_objs2 = [
-            AllChem.ReactionFromSmarts(x)
-            for x in run_reactants_experiments["canon_reaction_smarts_pubchem"]
+            AllChem.ReactionFromSmarts(canon_reaction_smarts(x, True, "drugbank", True))
+            for x in run_reactants_experiments["reaction_smarts"]
         ]
 
         correct, incorrect = compare_reaction_outputs(
             reactant_objs, extracted_smarts_objs, canon_extracted_smarts_objs2
         )
-        assert incorrect == 0
+        self.assertTrue(incorrect == 0)
 
     def test_run_reactions(self):
         rxn1 = "([*:1]-[N&H0&+0:2](-[*:3])-C.[*:4]-[N&H0&+0:5](-[*:6])-C)>>([*:1]-[N&H1&+0:2]-[*:3].[*:4]-[N&H1&+0:5]-[*:6])"
@@ -184,16 +182,34 @@ class TestReactionSmarts(absltest.TestCase):
         assert o
 
     def test_permute_reactants(self):
+        rxn1 = "[*:1]-[N&H0&+0:2](-[*:3])-C.[*:4]-[N&H0&+0:5](-[*:6])-C>>[*:1]-[N&H1&+0:2]-[*:3][C:7][N:8][*:4]-[N&H1&+0:5]-[*:6]"
+        rxn2 = "[*:4]-[N&H0&+0:5](-[*:6])-C.[*:1]-[N&H0&+0:2](-[*:3])-C>>[*:1]-[N&H1&+0:2]-[*:3][C:7][N:8][*:4]-[N&H1&+0:5]-[*:6]"
+
+        self.assertEqual(canon_reaction_smarts(rxn1), canon_reaction_smarts(rxn2))
+        self.assertEqual(
+            canon_reaction_smarts(rxn1, True), canon_reaction_smarts(rxn2, True)
+        )
+        self.assertEqual(
+            canon_reaction_smarts(rxn1, True, "drugbank"),
+            canon_reaction_smarts(rxn2, True, "drugbank"),
+        )
+        self.assertEqual(
+            canon_reaction_smarts(rxn1, True, "drugbank", True),
+            canon_reaction_smarts(rxn2, True, "drugbank", True),
+        )
+
         rxn1 = "([*:1]-[N&H0&+0:2](-[*:3])-C.[*:4]-[N&H0&+0:5](-[*:6])-C)>>([*:1]-[N&H1&+0:2]-[*:3].[*:4]-[N&H1&+0:5]-[*:6])"
         rxn2 = "([*:4]-[N&H0&+0:5](-[*:6])-C.[*:1]-[N&H0&+0:2](-[*:3])-C)>>([*:1]-[N&H1&+0:2]-[*:3].[*:4]-[N&H1&+0:5]-[*:6])"
         rxn3 = "([N&H0&+0](-C)(-*)-*.[N&H0&+0](-C)(-*)-*)>>([N&H1&+0](-*)-*.[N&H1&+0](-*)-*)"
 
-        assert canon_reaction_smarts(rxn1, True) != canon_reaction_smarts(rxn2, True)
-        assert (
-            canon_reaction_smarts(rxn1)
-            == canon_reaction_smarts(rxn2)
-            == canon_reaction_smarts(rxn3)
+        self.assertEqual(
+            canon_reaction_smarts(rxn1, True), canon_reaction_smarts(rxn2, True)
         )
+        self.assertEqual(
+            canon_reaction_smarts(rxn1, True, "drugbank", True),
+            canon_reaction_smarts(rxn2, True, "drugbank", True),
+        )
+        self.assertEqual(canon_reaction_smarts(rxn1), canon_reaction_smarts(rxn3))
 
         rxn1 = "[*:1]-[N&H0&+0:2](-[*:3])-C.[*:4]-[N&H1&+0:5](-[*:6])-C>>([*:1]-[N&H1&+0:2]-[*:3].[*:4]-[N&H1&+0:5]-[*:6])"
         rxn2 = "[*:4]-[N&H1&+0:5](-[*:6])-C.[*:1]-[N&H0&+0:2](-[*:3])-C>>([*:1]-[N&H1&+0:2]-[*:3].[*:4]-[N&H1&+0:5]-[*:6])"
@@ -201,22 +217,30 @@ class TestReactionSmarts(absltest.TestCase):
             "[N&H0&+0](-C)(-*)-*.[N&H1&+0](-C)(-*)-*>>([N&H1&+0](-*)-*.[N&H1&+0](-*)-*)"
         )
 
-        assert canon_reaction_smarts(rxn1, True) == canon_reaction_smarts(rxn2, True)
-        assert (
-            canon_reaction_smarts(rxn1)
-            == canon_reaction_smarts(rxn2)
-            == canon_reaction_smarts(rxn3)
+        self.assertEqual(
+            canon_reaction_smarts(rxn1, True), canon_reaction_smarts(rxn2, True)
         )
+        self.assertEqual(canon_reaction_smarts(rxn1), canon_reaction_smarts(rxn3))
 
         rxn1 = "[N&H0&+0](-[O])(-*)-*.[P].[N&H0&+0](-[O;H1])(-*)-*>>([N&H1&+0](-*)-*.[N&H1&+0](-*)-*)"
         rxn2 = "[N&H0&+0](-[O])(-*)-*.[N&H0&+0](-[O;H1])(-*)-*.[P]>>([N&H1&+0](-*)-*.[N&H1&+0](-*)-*)"
         rxn3 = "[P].[N&H0&+0](-[O])(-*)-*.[N&H0&+0](-[O;H1])(-*)-*>>([N&H1&+0](-*)-*.[N&H1&+0](-*)-*)"
 
-        assert canon_reaction_smarts(rxn1, True) == canon_reaction_smarts(rxn2, True)
-        assert (
+        self.assertEqual(
+            canon_reaction_smarts(rxn1, True), canon_reaction_smarts(rxn2, True)
+        )
+        self.assertTrue(
             canon_reaction_smarts(rxn1)
             == canon_reaction_smarts(rxn2)
             == canon_reaction_smarts(rxn3)
+        )
+
+        rxn1 = "([C:1].[N:2])>>[C:1]#[N:2]"
+        rxn2 = "([N:1].[C:2])>>[N:1]#[C:2]"
+
+        self.assertEqual(
+            canon_reaction_smarts(rxn1, True, "drugbank", True),
+            canon_reaction_smarts(rxn2, True, "drugbank", True),
         )
 
 
