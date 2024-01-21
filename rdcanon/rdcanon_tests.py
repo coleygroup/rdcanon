@@ -17,18 +17,18 @@ class TestRegularSmarts(absltest.TestCase):
     def test_two_atom_smarts(self):
         s_test1 = "[C;H0;+0]-[C;H1;+0]"
         s_test2 = "[C;H1;+0]-[C;H0;+0]"
-        assert canon_smarts(s_test1) == canon_smarts(s_test2)
+        self.assertEqual(canon_smarts(s_test1), canon_smarts(s_test2))
 
         s_test1 = "[C;H0;+0]=[C;H1;+0]"
         s_test2 = "[C;H1;+0]=[C;H0;+0]"
-        assert canon_smarts(s_test1) == canon_smarts(s_test2)
+        self.assertEqual(canon_smarts(s_test1), canon_smarts(s_test2))
 
         s_test1 = "[C;H0;++]=[C;H1;+0]"
         s_test2 = "[C;H1;+0]=[C;H0;+2]"
-        assert canon_smarts(s_test1) == canon_smarts(s_test2)
+        self.assertEqual(canon_smarts(s_test1), canon_smarts(s_test2))
 
         s_test1 = "[C;H1;+0]-[C;H1;+0]"
-        canon_smarts(s_test1)
+        self.assertEqual(canon_smarts(s_test1), canon_smarts(s_test1))
 
     def test_permutation_of_monosubstituted_benzene(self):
         results = []
