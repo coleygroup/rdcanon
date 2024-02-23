@@ -54,6 +54,18 @@ To run all unit tests:
 >python rdcanon_tests.py
 
 
+
+### Current Limitations
+No consolidation of atomic queries is performed via systematically replacing certain combinations of primitives with more concise or detailed representations (e.g. replacing [C;X4;+0] with [C;X4;H0;+0] or vice versa). 
+
+Isotope labels are not currently supported, nor is chirality or directionality beyond tetrahedral centers and cis/trans isomerism. 
+
+Bond queries that represent more than one bond type other than unspecified bonds (single or aromatic) 
+
+Finally, while the sequence of primitives is optimized within a recursive SMARTS, the sequence of atomic queries is not.
+
+These latter two points will likely be addressable if RDKit provided a way to modify query bonds with SMARTS.
+
 ### Manuscript Figures and Tests
 All data can be found in the manuscripts/data directory.
 
