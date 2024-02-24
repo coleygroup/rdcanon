@@ -138,6 +138,10 @@ class TestRegularSmarts(absltest.TestCase):
         for s in [s_test2, s_test3, s_test4, s_test5, s_test6]:
             self.assertEqual(canon_smarts(s), expected_out)
 
+        s_test1 = "[C]=,-[N]=[C]"
+        s_test2 = "[C]=[N]=,-[C]"
+        self.assertEqual(canon_smarts(s_test1), canon_smarts(s_test2))
+
 
 class TestReactionSmarts(absltest.TestCase):
     def test_check_products_of_reactions(self):
@@ -269,6 +273,10 @@ class TestRecursive(absltest.TestCase):
         s_test1 = "[$([n,c][c,o])&!$([c]),!$([c,o][c,n]);$([$([c,o]),$([c])])]"
         s_test2 = "[$([n,c][c,o])&!$([c]),!$([c,o][c,n]);$([$([c]),$([c,o])])]"
         assert canon_smarts(s_test1) == canon_smarts(s_test2)
+        s_test1 = canon_smarts("[$([#7R1]1-[#6R1]=[#7R1]-1)]")
+        s_test2 = canon_smarts("[$([#7R1]1-[#7R1]=[#6R1]-1)]")
+        assert canon_smarts(s_test1) == canon_smarts(s_test2)
+
 
     def test_multi_canon(self):
         path = (

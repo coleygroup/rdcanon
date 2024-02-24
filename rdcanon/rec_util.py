@@ -1,13 +1,8 @@
-from rdkit import Chem
-from rdkit.Chem import AllChem
-import re
-from rdcanon.token_parser import order_token_canon, recursive_compare
-import rdkit
 from collections import deque
-from rdcanon.askcos_prims import prims as prims1
-import random
 from functools import cmp_to_key
-
+import rdkit
+from rdkit import Chem
+import re
 
 bond_value_map = {
     "UNSPECIFIED": 1000,
@@ -36,20 +31,7 @@ bond_value_map = {
 }
 
 
-def custom_key2(item1t, item2t):
-    item1 = item1t["path_scores"]
-    item2 = item2t["path_scores"]
-
-    if "unmapped_canon" in item1t:
-        if item1t["unmapped_canon"] == item2t["unmapped_canon"]:
-            sm1 = item1t["san_smarts"]
-            sm2 = item2t["san_smarts"]
-            return (sm1 > sm2) - (sm1 < sm2)
-
-    return recursive_compare(item1, item2)
-
-
-class Node:
+class RecNode:
     def __init__(self, index, data):
         self.index = index
         self.data = data
@@ -71,69 +53,49 @@ class Node:
         return f"Node({self.index}, {self.data['smarts']})"
 
 
-class Graph:
-    def __init__(self, v=False):
+class RecGraph:
+    def __init__(self, recursive_compare, v=False):
         self.nodes = []
         self.top_score = 0
         self.v = v
+        self.recursive_compare = recursive_compare
         self.bond_indices_to_smarts = {}
         self.bond_indices_to_chiral = {}
 
-    def graph_from_smarts(self, smarts, embedding):
-        mol = Chem.MolFromSmarts(smarts)
-        if not mol:
-            raise ValueError("Invalid SMARTS provided")
-        mol = Chem.MolFromSmarts(Chem.MolToSmarts(mol))
+    def custom_key2(self, item1t, item2t):
+        item1 = item1t["path_scores"]
+        item2 = item2t["path_scores"]
 
-        Chem.SanitizeMol(mol, sanitizeOps=Chem.SanitizeFlags.SANITIZE_NONE)
+        if "unmapped_canon" in item1t:
+            if item1t["unmapped_canon"] == item2t["unmapped_canon"]:
+                sm1 = item1t["san_smarts"]
+                sm2 = item2t["san_smarts"]
+                return (sm1 > sm2) - (sm1 < sm2)
 
-        # Create nodes for each atom
-        if self.v:
-            print("input SMARTS:", smarts)
-            print("rd-sanitized SMARTS:", Chem.MolToSmarts(mol))
-            print()
-            print("token embeddings")
-        for atom in mol.GetAtoms():
+        return self.recursive_compare(item1, item2)
+
+    def graph_from_smarts(self, mol, order_token_canon, embedding):
+        for i,atom in enumerate(mol.GetAtoms()):
             node_data = {
                 "symbol": atom.GetSymbol(),
                 "atomic_num": atom.GetAtomicNum(),
-                "valence": atom.GetExplicitValence(),
                 "smarts": atom.GetSmarts(),
                 "stereo": atom.GetChiralTag(),
                 "aromatic": atom.GetIsAromatic(),
                 "hybridization": atom.GetHybridization(),
-                # Add other desired atom properties here
             }
-            n = Node(atom.GetIdx(), node_data)
-            atom_map = re.findall(r":\d+]", n.data["smarts"])
-            # print("incoming", n.data["smarts"])
-            if len(atom_map) > 0:
-                sm, sc, _ = order_token_canon(
-                    re.sub(r":\d+]", "]", n.data["smarts"]),
-                    atom_map[0][0:-1],
-                    embedding,
-                )
-            else:
-                sm, sc, _ = order_token_canon(
-                    re.sub(r":\d+]", "]", n.data["smarts"]), None, embedding
-                )
+            n = RecNode(atom.GetIdx(), node_data)
 
-            if self.v:
-                print(">", n.data["smarts"], sm, sc)
 
-            single_score = sc
-            while True:
-                if type(single_score) == list or type(single_score) == tuple:
-                    single_score = single_score[0]
-                else:
-                    break
+            sm, sc, _ = order_token_canon(
+                n.data["smarts"], None, embedding
+            )
 
-            n.score_original = 1 / single_score
+
             n.serialized_score = sc
             n.data["smarts"] = sm
+
             self.nodes.append(n)
-        if self.v:
-            print()
 
         amol = Chem.MolFromSmarts("C:C")
         abond = amol.GetBondWithIdx(0)
@@ -189,12 +151,12 @@ class Graph:
 
     def find_hamiltonian_paths_iterative(self, start_node, best_seen):
         paths = []
-        start_node = (self.nodes[start_node], None, None)
+        start_node = (self.nodes[start_node], None)
         pa = [start_node[0].index]
         stack = deque([(start_node, [start_node], pa, deque())])
         while stack:
             (curr_node, path, visited, junction) = stack.popleft()
-            current_node, current_bond, curr_bond_smarts = curr_node
+            current_node, current_bond = curr_node
             if len(visited) == len(self.nodes):
                 paths.append(path)
                 continue
@@ -207,7 +169,7 @@ class Graph:
                     neighbors_not_visited = neighbors_not_visited + 1
 
             if neighbors_not_visited > 1:
-                junction.append((current_node, current_bond, curr_bond_smarts))
+                junction.append((current_node, current_bond))
 
             if all_neighbors_visited:
                 jnode = junction.pop()
@@ -215,11 +177,7 @@ class Graph:
 
             for i, neighbor in enumerate(current_node.bonds):
                 if neighbor.index not in visited:
-                    nei = (
-                        neighbor,
-                        current_node.bond_types[i],
-                        current_node.bond_smarts[i],
-                    )
+                    nei = (neighbor, current_node.bond_types[i])
 
                     new_path = path + [nei]
                     np = []
@@ -240,7 +198,10 @@ class Graph:
                             pass
                         else:
                             if (
-                                min([np, best_seen], key=cmp_to_key(recursive_compare))
+                                min(
+                                    [np, best_seen],
+                                    key=cmp_to_key(self.recursive_compare),
+                                )
                                 == np
                             ):
                                 best_seen = np
@@ -249,11 +210,7 @@ class Graph:
 
             for i, neighbor in enumerate(current_node.bonds):
                 if neighbor.index not in visited:
-                    nei = (
-                        neighbor,
-                        current_node.bond_types[i],
-                        current_node.bond_smarts[i],
-                    )
+                    nei = (neighbor, current_node.bond_types[i])
 
                     new_path = path + [nei]
                     np = []
@@ -270,62 +227,46 @@ class Graph:
                         new_visited.append(rr)
                     new_visited.append(neighbor.index)
 
-                    if min([np, best_seen], key=cmp_to_key(recursive_compare)) == np:
+                    if (
+                        min([np, best_seen], key=cmp_to_key(self.recursive_compare))
+                        == np
+                    ):
                         stack.append((nei, new_path, new_visited, junction.copy()))
 
         return paths, best_seen
 
     def all_depth_first_search(self):
-        if self.v:
-            print("enumerated paths")
-
-        node_data = [x.serialized_score for x in self.nodes]
-
-        n = min(node_data, key=cmp_to_key(recursive_compare))
-        top_nodes = []
-        for i, nd in enumerate(node_data):
-            if nd == n:
-                top_nodes.append(i)
-
         poss_paths = []
         all_paths_scored = []
         path_idx = 0
-        best_seen = []
-        for idx, h in enumerate(self.nodes):
-            if idx not in top_nodes:
-                continue
-            all_paths, new_best_seen = self.find_hamiltonian_paths_iterative(
-                h.index, best_seen
+        all_paths, best_seen = self.find_hamiltonian_paths_iterative(0, [])
+
+        for r in all_paths:
+            path_ar = []
+            # print(r)
+            for rr in r:
+                # print(rr, rr[0])
+                path_ar.append(rr[0].serialized_score)
+                if rr[1] == None:
+                    bond_v = "None"
+                else:
+                    bond_v = rr[1].name
+                path_ar.append([bond_value_map[bond_v]])
+            # print(path_ar)
+            all_paths_scored.append(
+                {
+                    "path_scores": path_ar,
+                    "path": r,
+                }
             )
-            best_seen = new_best_seen
-            # print(all_paths)
-            # for hjh in all_paths:
-            # print(hjh)
-            # print(len(all_paths))
-            for r in all_paths:
-                path_ar = []
+            if self.v:
+                print("> path", path_idx)
                 for rr in r:
-                    path_ar.append(rr[0].serialized_score)
-                    if rr[1] == None:
-                        bond_v = "None"
-                    else:
-                        bond_v = rr[1].name
+                    print(">>", rr[0], rr[0].serialized_score, rr[1])
+                print(">>", path_ar)
 
-                    path_ar.append([bond_value_map[bond_v]])
-                all_paths_scored.append(
-                    {
-                        "path_scores": path_ar,
-                        "path": r,
-                    }
-                )
-                if self.v:
-                    print("> path", path_idx)
-                    for rr in r:
-                        print(">>", rr[0], rr[0].serialized_score, rr[1])
-                    print(">>", path_ar)
-
-                poss_paths.append(r)
-                path_idx = path_idx + 1
+            poss_paths.append(r)
+            path_idx = path_idx + 1
 
         if self.v:
             print()
@@ -333,7 +274,7 @@ class Graph:
             for kk in all_paths_scored:
                 print(">", kk)
 
-        these_weights = sorted(all_paths_scored, key=cmp_to_key(custom_key2))
+        these_weights = sorted(all_paths_scored, key=cmp_to_key(self.custom_key2))
 
         if self.v:
             print()
@@ -386,21 +327,20 @@ class Graph:
                 return True
         return False
 
-    def recreate_molecule(self, mapping):
+    def recreate_molecule(self):
         top_scores = self.all_depth_first_search()
         sms = []
         for top_score in top_scores:
             sms.append(
                 (
                     self.regen_molecule(top_score["path"], False),
-                    self.regen_molecule(top_score["path"], mapping),
                     top_score["path_scores"],
                 )
             )
 
         sms.sort(key=lambda x: x[0])
-        self.top_score = sms[0][2]
-        return sms[0][1]
+        self.top_score = sms[0][1]
+        return sms[0]
 
     def regen_molecule(self, dfs, mapping):
         mol = Chem.RWMol()
@@ -409,7 +349,7 @@ class Graph:
         idxes_out = []
         new_map_to_old_map = {}
         atom_map_number_to_true_atom_map_number = {}
-        for node, bond, bond_smarts in dfs:
+        for node, bond in dfs:
             sm = node.data["smarts"]
             atom_map = re.findall(r":\d+", sm)
             if not mapping:
@@ -423,15 +363,13 @@ class Graph:
                 atom_map_number_to_true_atom_map_number[node.index] = int(
                     atom_map[0][1:]
                 )
-
-            # atom.SetIsotope(node.index)
             mol.AddAtom(atom)
             old_map_to_new_map[node.index] = i
             new_map_to_old_map[i] = node.index
             idxes_out.append(node.index)
             i = i + 1
         added = []
-        for node, bonde, bond_smarts in dfs:
+        for node, bonde in dfs:
             for i, bond in enumerate(node.bonds):
                 if (node.index, bond.index) in added or (
                     bond.index,
@@ -603,10 +541,8 @@ class Graph:
         bond_order = []
         seen_bonds = []
         for i, r in enumerate(tmol.GetBonds()):
-
             this_node = tmol.GetAtomWithIdx(r.GetBeginAtomIdx()).GetAtomMapNum()
             next_node = tmol.GetAtomWithIdx(r.GetEndAtomIdx()).GetAtomMapNum()
-
             if (this_node, next_node) in seen_bonds or (
                 next_node,
                 this_node,
@@ -620,8 +556,7 @@ class Graph:
             else:
                 bond_order.append(self.bond_indices_to_smarts[(this_node, next_node)])
 
-        for i, r in enumerate(tmol.GetAtoms()):
-
+        for r in tmol.GetAtoms():
             if mapping:
                 if r.GetAtomMapNum() in atom_map_number_to_true_atom_map_number:
                     new_map = atom_map_number_to_true_atom_map_number[r.GetAtomMapNum()]
@@ -633,8 +568,6 @@ class Graph:
                     r.ClearProp("molAtomMapNumber")
                 if r.GetAtomMapNum() == 0:
                     r.ClearProp("molAtomMapNumber")
-
-            # print(r.GetSmarts(), r.GetSymbol(), r.GetChiralTag(), re.sub(r.GetSymbol(), r.GetSymbol() + "@", r.GetSmarts()))
 
             if str(r.GetChiralTag()) == "CHI_TETRAHEDRAL_CCW":
 
@@ -658,22 +591,15 @@ class Graph:
             else:
                 node_order.append(r.GetSmarts())
 
-        # print()
-
         tmol_copy = Chem.MolFromSmarts(Chem.MolToSmarts(tmol))
         for r in tmol_copy.GetAtoms():
             if "molAtomMapNumber" in r.GetPropsAsDict():
                 r.ClearProp("molAtomMapNumber")
             if r.GetAtomMapNum() == 0:
                 r.ClearProp("molAtomMapNumber")
-            # print(r.GetSmarts())
-        self.unmapped_canon = Chem.MolToSmarts(tmol_copy)
-        # print(node_order)
-        # print(Chem.MolToSmarts(tmol))
 
-        # print(len(tmol.GetBonds()))
-        # print(len(bond_order))
-        # print(bond_order)
+        self.unmapped_canon = Chem.MolToSmarts(tmol_copy)
+
         final_out = Chem.MolFragmentToSmiles(
             tmol,
             atomsToUse=range(len(node_order)),
@@ -684,272 +610,3 @@ class Graph:
         )
 
         return final_out
-        # return Chem.MolToSmarts(tmol)
-
-    def __repr__(self):
-        return f"Graph({self.nodes})"
-
-
-class Reaction:
-    def __init__(
-        self, input_reaction_smarts, mapping, embedding, remapping=False, v=False
-    ):
-        self.reactants = []
-        self.agents = []
-        self.products = []
-        self.input_reaction_smarts = input_reaction_smarts
-        self.mapping = mapping
-        self.embedding = embedding
-        self.remapping = remapping
-        self.v = v
-        self.index = 1
-        self.index_map = {}
-
-    def _load_reactants(self, k):
-        for r in k.GetReactants():
-            r_sm = Chem.MolToSmarts(r)
-
-            if "." in r_sm:
-                smss = r_sm.split(".")
-            else:
-                smss = [r_sm]
-            grouped = []
-            for sm in smss:
-                san_sm, ts, unmapped_canon = canon_smarts(
-                    sm,
-                    self.mapping,
-                    self.embedding,
-                    return_score=True,
-                )
-
-                grouped.append(
-                    {
-                        "path_scores": ts,
-                        "san_smarts": san_sm,
-                        "unmapped_canon": unmapped_canon,
-                    }
-                )
-
-            grouped = sorted(grouped, key=cmp_to_key(custom_key2))
-
-            san_sm_out = ".".join([x["san_smarts"] for x in grouped])
-            unmapped_san_sm_out = ".".join([x["unmapped_canon"] for x in grouped])
-            tss = [x["path_scores"] for x in grouped]
-            if "." in r_sm:
-                san_sm_out = "(" + san_sm_out + ")"
-                unmapped_san_sm_out = "(" + unmapped_san_sm_out + ")"
-
-            # print(r_sm, san_sm_out, ts)
-            self.reactants.append(
-                {
-                    "path_scores": tss,
-                    "original_smarts": r_sm,
-                    "san_smarts": san_sm_out,
-                    "unmapped_canon": unmapped_san_sm_out,
-                }
-            )
-
-    def _load_agents(self, k):
-        for r in k.GetAgents():
-            r_sm = Chem.MolToSmarts(r)
-            if "." in r_sm:
-                smss = r_sm.split(".")
-            else:
-                smss = [r_sm]
-            grouped = []
-            for sm in smss:
-                san_sm, ts, unmapped_canon = canon_smarts(
-                    sm,
-                    self.mapping,
-                    self.embedding,
-                    return_score=True,
-                )
-                grouped.append(
-                    {
-                        "path_scores": ts,
-                        "san_smarts": san_sm,
-                        "unmapped_canon": unmapped_canon,
-                    }
-                )
-
-            grouped = sorted(grouped, key=cmp_to_key(custom_key2))
-            san_sm_out = ".".join([x["san_smarts"] for x in grouped])
-            unmapped_san_sm_out = ".".join([x["unmapped_canon"] for x in grouped])
-            tss = [x["path_scores"] for x in grouped]
-            if "." in r_sm:
-                san_sm_out = "(" + san_sm_out + ")"
-                unmapped_san_sm_out = "(" + unmapped_san_sm_out + ")"
-
-            self.agents.append(
-                {
-                    "path_scores": tss,
-                    "original_smarts": r_sm,
-                    "san_smarts": san_sm_out,
-                    "unmapped_canon": unmapped_san_sm_out,
-                }
-            )
-
-    def _load_products(self, k):
-        for r in k.GetProducts():
-            r_sm = Chem.MolToSmarts(r)
-            if "." in r_sm:
-                smss = r_sm.split(".")
-            else:
-                smss = [r_sm]
-            grouped = []
-            for sm in smss:
-                san_sm, ts, unmapped_canon = canon_smarts(
-                    sm,
-                    self.mapping,
-                    self.embedding,
-                    return_score=True,
-                )
-                grouped.append(
-                    {
-                        "path_scores": ts,
-                        "san_smarts": san_sm,
-                        "unmapped_canon": unmapped_canon,
-                    }
-                )
-
-            grouped = sorted(grouped, key=cmp_to_key(custom_key2))
-            san_sm_out = ".".join([x["san_smarts"] for x in grouped])
-            unmapped_san_sm_out = ".".join([x["unmapped_canon"] for x in grouped])
-            tss = [x["path_scores"] for x in grouped]
-            if "." in r_sm:
-                san_sm_out = "(" + san_sm_out + ")"
-                unmapped_san_sm_out = "(" + unmapped_san_sm_out + ")"
-
-            self.products.append(
-                {
-                    "path_scores": tss,
-                    "original_smarts": r_sm,
-                    "san_smarts": san_sm_out,
-                    "unmapped_canon": unmapped_san_sm_out,
-                }
-            )
-
-    def remap(self, in_smarts):
-        for r in in_smarts:
-            grouped = False
-            if r["san_smarts"][0] == "(":
-                t_sm = r["san_smarts"][1:-1]
-                grouped = True
-            else:
-                t_sm = r["san_smarts"]
-            sm_mol = Chem.MolFromSmarts(t_sm)
-            for a in sm_mol.GetAtoms():
-                if a.GetAtomMapNum() == 0:
-                    continue
-                if a.GetAtomMapNum() not in self.index_map:
-                    self.index_map[a.GetAtomMapNum()] = self.index
-                    self.index = self.index + 1
-                a.SetAtomMapNum(self.index_map[a.GetAtomMapNum()])
-            r["san_smarts"] = Chem.MolToSmarts(sm_mol)
-            if grouped:
-                r["san_smarts"] = "(" + r["san_smarts"] + ")"
-
-    def canonicalize_template(self):
-        k = AllChem.ReactionFromSmarts(self.input_reaction_smarts)
-        self._load_reactants(k)
-        self._load_agents(k)
-        self._load_products(k)
-
-        reactants_sort = sorted(self.reactants, key=cmp_to_key(custom_key2))
-
-        if self.remapping:
-            self.remap(reactants_sort)
-
-        san_smarts_out = ".".join([r["san_smarts"] for r in reactants_sort])
-
-        if len(self.agents) > 0:
-            san_smarts_out = san_smarts_out + ">"
-            agents_sort = sorted(self.agents, key=cmp_to_key(custom_key2))
-            if self.remapping:
-                self.remap(agents_sort)
-            san_smarts_out = san_smarts_out + ".".join(
-                [r["san_smarts"] for r in agents_sort]
-            )
-
-        san_smarts_out = san_smarts_out + ">>"
-        products_sort = sorted(self.products, key=cmp_to_key(custom_key2))
-        if self.remapping:
-            self.remap(products_sort)
-        san_smarts_out = san_smarts_out + ".".join(
-            [r["san_smarts"] for r in products_sort]
-        )
-
-        return san_smarts_out
-
-
-def random_smarts(smarts="[Cl][C][C][C][N][C][C][C][Br]", mapping=False):
-    """
-    Generate a random molecule based on the given SMARTS pattern.
-
-    Args:
-        smarts (str): The SMARTS pattern representing the molecule structure. Default is "[Cl][C][C][C][N][C][C][C][Br]".
-        mapping (bool): Whether to generate a mapping of atom indices between the original and recreated molecule. Default is False.
-
-    Returns:
-        str: The recreated SMARTS pattern.
-
-    """
-    g = Graph()
-
-    prims = {}
-    for k in prims1:
-        prims[k] = random.random()
-
-    g.graph_from_smarts(smarts, prims)
-
-    return g.recreate_molecule(mapping)
-
-
-def canon_smarts(
-    smarts,
-    mapping=False,
-    embedding="drugbank",
-    return_score=False,
-    v=False,
-):
-    """
-    Canonicalizes a SMARTS pattern.
-
-    Args:
-        smarts (str): The input SMARTS pattern to be canonicalized.
-        mapping (bool, optional): Whether to return the atom mapping. Defaults to False.
-        embedding (str, optional): The query primitive frequency dictionary to use. Defaults to "drugbank".
-        return_score (bool, optional): Whether to return the top score. Defaults to False.
-        v (bool, optional): Whether to enable verbose mode. Defaults to False.
-
-    Returns:
-        str or tuple: The canonicalized SMARTS pattern. If `return_score` is True, a tuple containing the canonicalized SMARTS pattern,
-        the top score, and the unmapped canonical SMARTS pattern is returned.
-    """
-    g = Graph(v)
-    g.graph_from_smarts(smarts, embedding)
-    out = g.recreate_molecule(mapping)
-    if return_score:
-        return out, g.top_score, g.unmapped_canon
-    return out
-
-
-def debug(smarts, mapping=False, embedding="drugbank", return_score=False):
-    canon_smarts(smarts, mapping, embedding, return_score, True)
-
-
-def canon_reaction_smarts(smarts, mapping=False, embedding="drugbank", remapping=True):
-    """
-    Canonicalizes a reaction SMARTS string.
-
-    Args:
-        smarts (str): The reaction SMARTS string to be canonicalized.
-        mapping (bool, optional): Whether to include atom mapping in the canonicalization. Defaults to False.
-        embedding (str, optional): The embedding to use for the canonicalization. Defaults to "drugbank".
-        remapping (bool, optional): Whether to remap atom indices after canonicalization. Defaults to True.
-
-    Returns:
-        str: The canonicalized reaction SMARTS string.
-    """
-    reaction = Reaction(smarts, mapping, embedding, remapping)
-    return reaction.canonicalize_template()

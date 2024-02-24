@@ -13,6 +13,7 @@ from rdcanon.drugbank_prims_with_nots import prims as prims3
 from rdcanon.np_prims import prims as prims4
 import random
 from functools import cmp_to_key
+from rdcanon.rec_util import RecGraph
 
 
 # PRIMITIVE:  "D" | "H" | "h" | "R" | "r" | "v" | "X" | "x" | "-" | "+" | "#"
@@ -557,7 +558,7 @@ class SMARTSTransformer(Transformer):
         return args
 
 
-def split_smarts(input_smarts):
+def split_smarts_f(input_smarts):
     tsmarts = Chem.MolFromSmarts(input_smarts)
     out_sm = Chem.MolToSmarts(tsmarts)
     if out_sm[0] == "[" and out_sm[-1] == "]":
@@ -649,22 +650,24 @@ def group_split_smarts(split_smarts):
 
 def check_special_chars_outside_nested(sm, nested_start="$(", nested_end=")"):
     """
-    Check if "!", "&", and "," are in the string `sm`, but not inside `$( x )` structures.
+    Check if "&" is in the string `sm`, but not inside `$( x )` structures.
     """
     inside_nested = False
     found_chars = {"&": False}
     i = 0
-    while i < len(sm):
-        if sm.startswith(nested_start, i):
-            inside_nested = True
-            i += len(nested_start) - 1  # Adjust index to skip nested_start
-        elif sm.startswith(nested_end, i) and inside_nested:
-            inside_nested = False
-            i += len(nested_end) - 1  # Adjust index to skip nested_end
 
-        if not inside_nested:
-            if sm[i] in found_chars:
-                found_chars[sm[i]] = True
+    nested_level = 0
+    while i < len(sm):
+        if sm.startswith(nested_start, i) or sm.startswith("(", i):
+            nested_level += 1
+            i += len(nested_start) - 1
+        elif sm.startswith(nested_end, i) and nested_level > 0:
+            nested_level -= 1
+            i += len(nested_end) - 1
+
+        if nested_level == 0 and sm[i] in found_chars:
+            found_chars[sm[i]] = True
+
         i += 1
     return all(found_chars.values())
 
@@ -685,7 +688,9 @@ def reorder_comma_token(in_token):
     tokens = []
     spl_token = custom_split(in_token, ",")
     for token in spl_token:
+        # print(">>", token)
         if check_special_chars_outside_nested(token):
+            # print("exuse?", token)
             rtoken = reorder_and_token(token)
             tokens.append(rtoken)
         else:
@@ -732,6 +737,7 @@ def reorder_internal_split_smarts(grouped_split_smarts):
                 ordered_out[group].append(tok_out)
         elif group == ",":
             for smt in grouped_split_smarts[group]:
+                # print(smt)
                 tok_out = reorder_comma_token(smt)
                 ordered_out[group].append(tok_out)
         else:
@@ -745,7 +751,7 @@ def reorder_internal_split_smarts(grouped_split_smarts):
 
 
 def sanitize_smarts_token(in_token):
-    o1 = list(set(split_smarts(in_token)))
+    o1 = list(set(split_smarts_f(in_token)))
     o2 = group_split_smarts(o1)
     o3 = reorder_internal_split_smarts(o2)
     return o3, o2
@@ -779,62 +785,96 @@ def gen_data_substructure(tree_in, digraph, prims):
     results = []
     ops = []
     stack = deque()
+    # print()
+    # print(tree_in)
     stack.append((tree_in, 0))
     n = len(digraph.nodes)
     while len(stack) > 0:
         cur = stack.popleft()
+        # print("cur", cur)
         weights = []
         if cur[0][0] == "and":
             label = "&"
+            # print(label)
             for iidx, i in enumerate(cur[0][1]):
                 if iidx != len(cur[0][1]) - 1:
                     ops.append("and (&)")
                 stack.append((i, n))
         elif cur[0][0] == "or":
             label = ","
+            # print(label)
             for iidx, i in enumerate(cur[0][1]):
+                # print("help", i)
                 stack.append((i, n))
                 if iidx != len(cur[0][1]) - 1:
                     ops.append("or (,)")
         else:
             result, tok = transformer.transform(cur[0][0])
             label = parse_label(result[0])
+            # print(label, tok)
             if label == "rec":
                 if tok[0] == "!":
                     inc = 1
                 else:
                     inc = 0
+                # print("$$$", tok[2 + inc : -1])
                 mm_rec = Chem.MolFromSmarts(tok[2 + inc : -1])
-                for atom_idx, atom in enumerate(mm_rec.GetAtoms()):
-                    sm, scs, wts = order_token_canon(atom.GetSmarts(), None, prims)
-                    weights.append(scs)
-                    atom.SetQuery(Chem.MolFromSmarts(sm).GetAtoms()[0])
-                    if atom_idx + 1 < mm_rec.GetNumAtoms():
-                        bond = mm_rec.GetBondBetweenAtoms(atom_idx, atom_idx + 1)
+                # scores_no_bond = []
+                # for atom_idx, atom in enumerate(mm_rec.GetAtoms()):
+                    # sm, scs, wts = order_token_canon(atom.GetSmarts(), None, prims)
+                    # weights.append(scs)
+                    # scores_no_bond.append(scs)
+                    # atom.SetQuery(Chem.MolFromSmarts(sm).GetAtoms()[0])
+                    # if atom_idx + 1 < mm_rec.GetNumAtoms():
+                    #     bond = mm_rec.GetBondBetweenAtoms(atom_idx, atom_idx + 1)
 
-                        if bond:
-                            if bond.Match(abond) and bond.Match(sbond):
-                                bondv = bond_value_map["UNSPECIFIED"]
+                    #     if bond:
+                    #         if bond.Match(abond) and bond.Match(sbond):
+                    #             bondv = bond_value_map["UNSPECIFIED"]
 
-                            else:
-                                bondv = bond_value_map[bond.GetBondType().name]
-                        else:
-                            bondv = 2
-                    else:
-                        bondv = 2
-                    weights.append([bondv])
+                    #         else:
+                    #             bondv = bond_value_map[bond.GetBondType().name]
+                    #     else:
+                    #         bondv = 2
+                    # else:
+                    #     bondv = 2
+                    # weights.append([bondv])
+
+
                 if inc:
-                    label = "!$(" + Chem.MolToSmarts(mm_rec) + ")"
+                    rg = RecGraph(recursive_compare)
+                    rg.graph_from_smarts(mm_rec, order_token_canon, prims)
+                    o, w = rg.recreate_molecule()
+                    # print(weights)
+                    # print(o)
+                    # print(w)
+                    weights = w
+                    label = "!$(" + o + ")"
+                    # label = "!$(" + Chem.MolToSmarts(mm_rec) + ")"
+
                 else:
-                    label = "$(" + Chem.MolToSmarts(mm_rec) + ")"
+                    rg = RecGraph(recursive_compare)
+                    rg.graph_from_smarts(mm_rec, order_token_canon, prims)
+                    o, w = rg.recreate_molecule()
+                    # print(weights)
+                    # print(o)
+                    # print(w)
+
+                    weights = w
+                    label = "$(" + o + ")"
+
+                    # label = "$(" + Chem.MolToSmarts(mm_rec) + ")"
 
             for res in result:
                 results.append(res)
 
+        # print(label, cur[1], digraph.nodes[cur[1]])
         if len(weights) > 0:
             digraph.add_node(n, label=label, weights=[tuple(weights)])
         else:
             digraph.add_node(n, label=label)
+
+        # print(label)
         digraph.add_edge(n, cur[1])
         n = n + 1
 
@@ -866,6 +906,8 @@ def gen_data_structure(sanitized, group_smarts, test_smarts, prims="askcos"):
             continue
         for ixi, i in enumerate(sanitized[r]):  # sample
             token_num += 1
+            # print(group_smarts[r])
+            # print(group_smarts[r][ixi])
             trees.append(i)
             titles.append(group_smarts[r][ixi])
 
@@ -1047,8 +1089,13 @@ def order_token_canon(
                 "embedding must be 'askcos', 'pubchem', 'drugbank', 'npatlas', or a dictionary of primitives"
             )
 
+    # print("inp", in_smarts_token)
+
     sanitized, group_smarts = sanitize_smarts_token(in_smarts_token)
+    # print(sanitized)
     _, _, _, dg, _ = gen_data_structure(sanitized, group_smarts, in_smarts_token, prims)
+
+    # print(dg)
 
     remaining_nodes = []
     for node in dg.nodes():
@@ -1059,6 +1106,7 @@ def order_token_canon(
             else:
                 inc = 0
             if prim_sm[0 + inc] == "$":
+                # print(dg.nodes[node]["label"], dg.nodes[node]["weights"])
                 pass
             else:
                 dg.nodes[node]["weights"] = [
@@ -1068,8 +1116,17 @@ def order_token_canon(
             dg.nodes[node]["text"] = prim_sm
         else:
             remaining_nodes.append(node)
+
+    
+    # for r in dg.nodes():
+        # print(r, dg.nodes[r])
+
     stack = deque()
     stack.append(0)
+
+
+    # for no in dg.nodes():
+        # print(no, dg.nodes[no])
 
     weights_in_order = []
     been_sorted = []
@@ -1093,7 +1150,15 @@ def order_token_canon(
                     txt = dg.nodes[adj]["text"]
                 else:
                     txt = None
+
+                # print(txt, dg.nodes[adj]["weights"])
                 these_weights.append((dg.nodes[adj]["weights"], txt))
+
+        # for r in these_weights:
+        #     print(r[1])
+        #     print(r[0])
+        #     print()
+        # print("~~")
 
         if not recurse:
             been_sorted.append(node)
@@ -1110,12 +1175,19 @@ def order_token_canon(
                     dg.nodes[node]["label"] = ";"
 
             if op == ";" or op == "&":
+                # print(">>", op, these_weights)
                 these_weights = sorted(these_weights, key=cmp_to_key(custom_key2))
                 dg.nodes[node]["weights"] = these_weights
             elif op == ",":
+                # print(">>", op, these_weights)
+                # print(">>", op, these_weights[1])
+                # print()
                 these_weights = sorted(
                     these_weights, key=cmp_to_key(custom_key2), reverse=True
                 )
+                # print(">>", these_weights[0])
+                # print(">>", these_weights[1])
+                # print()
                 dg.nodes[node]["weights"] = these_weights
 
             this_text = [r[1] for r in these_weights]
@@ -1150,77 +1222,77 @@ def generate(
         sanitized, group_smarts, test_smarts
     )
 
-    fig = plt.figure(figsize=(3.5, 4), dpi=300)
-    gs = gridspec.GridSpec(
-        1,
-        len(hmps),
-        width_ratios=[len(hmps[i].T) + len(opss[i]) for i in range(len(hmps))],
-        wspace=0.0,
-        hspace=0.0,
-        top=0.9,
-        bottom=0.1,
-        left=0.1,
-        right=0.9,
-    )
+    # fig = plt.figure(figsize=(3.5, 4), dpi=300)
+    # gs = gridspec.GridSpec(
+    #     1,
+    #     len(hmps),
+    #     width_ratios=[len(hmps[i].T) + len(opss[i]) for i in range(len(hmps))],
+    #     wspace=0.0,
+    #     hspace=0.0,
+    #     top=0.9,
+    #     bottom=0.1,
+    #     left=0.1,
+    #     right=0.9,
+    # )
 
-    ylim = 24
-    for i, axs in enumerate(gs):
-        axs = plt.subplot(gs[i])
-        cmap = mcolors.ListedColormap(["black", "darkgrey", "lightgrey", "#f7ae1d"])
-        bounds = [-15, -10, -6, -1, 0]
-        norm = mcolors.BoundaryNorm(bounds, cmap.N)
-        hm = hmps[i].T
-        hm = hm[:, :ylim]
-        ops = opss[i][: len(opss[i]) - 1]
-        hm2 = []
-        ops2 = []
-        for iix, ii in enumerate(hm):
-            hm2.append(ii)
-            ops2.append("")
-            if iix < len(ops):
-                if ops[iix] == "or (,)":
-                    val = -5
-                elif ops[iix] == "and (&)":
-                    val = -10
-                hm2.append([val] * len(ii))
-                ops2.append(ops[iix])
+    # ylim = 24
+    # for i, axs in enumerate(gs):
+    #     axs = plt.subplot(gs[i])
+    #     cmap = mcolors.ListedColormap(["black", "darkgrey", "lightgrey", "#f7ae1d"])
+    #     bounds = [-15, -10, -6, -1, 0]
+    #     norm = mcolors.BoundaryNorm(bounds, cmap.N)
+    #     hm = hmps[i].T
+    #     hm = hm[:, :ylim]
+    #     ops = opss[i][: len(opss[i]) - 1]
+    #     hm2 = []
+    #     ops2 = []
+    #     for iix, ii in enumerate(hm):
+    #         hm2.append(ii)
+    #         ops2.append("")
+    #         if iix < len(ops):
+    #             if ops[iix] == "or (,)":
+    #                 val = -5
+    #             elif ops[iix] == "and (&)":
+    #                 val = -10
+    #             hm2.append([val] * len(ii))
+    #             ops2.append(ops[iix])
 
-        if i < len(hmps) - 1:
-            hm2.append([-20] * len(hm[0]))
-            ops2.append("and (;)")
-        hm2 = np.array(hm2).T
-        x_toks = list(x_tokss[i])[:ylim]
-        if i == 0:
-            axs.set_yticks(range(len(x_toks)), x_toks)
-            axs.set_yticklabels(x_toks, fontsize=6, fontfamily="arial")
-        else:
-            axs.set_yticks([])
-        axs.set_xticks(range(len(ops2)), ops2, rotation=90)
-        axs.set_xticklabels(ops2, fontsize=6, rotation=90, fontfamily="arial")
-        masked_array = np.ma.array(hm2, mask=np.isnan(hm2))
-        # cmap = matplotlib.cm.plasma
-        cmap.set_bad("beige", 1.0)
-        axs.imshow(hm2, cmap=cmap, norm=norm)
-        for idx1, ii in enumerate(hm2):
-            for idx2, jj in enumerate(ii):
-                if not np.isnan(jj) and jj > -1:
-                    axs.text(
-                        idx2,
-                        idx1,
-                        str(int(jj)),
-                        ha="center",
-                        va="center",
-                        color="black",
-                        fontsize=6,
-                        fontfamily="arial",
-                    )
-        for i22 in range(hm2.shape[0]):
-            axs.axhline(i22 - 0.5, color="black", linewidth=0.8)
-        # axs.set_title(titles[i], fontsize=6, fontfamily='arial')
-        axs.set_aspect("auto")
+    #     if i < len(hmps) - 1:
+    #         hm2.append([-20] * len(hm[0]))
+    #         ops2.append("and (;)")
+    #     hm2 = np.array(hm2).T
+    #     x_toks = list(x_tokss[i])[:ylim]
+    #     if i == 0:
+    #         axs.set_yticks(range(len(x_toks)), x_toks)
+    #         axs.set_yticklabels(x_toks, fontsize=6, fontfamily="arial")
+    #     else:
+    #         axs.set_yticks([])
+    #     axs.set_xticks(range(len(ops2)), ops2, rotation=90)
+    #     axs.set_xticklabels(ops2, fontsize=6, rotation=90, fontfamily="arial")
+    #     masked_array = np.ma.array(hm2, mask=np.isnan(hm2))
+    #     # cmap = matplotlib.cm.plasma
+    #     cmap.set_bad("beige", 1.0)
+    #     axs.imshow(hm2, cmap=cmap, norm=norm)
+    #     for idx1, ii in enumerate(hm2):
+    #         for idx2, jj in enumerate(ii):
+    #             if not np.isnan(jj) and jj > -1:
+    #                 axs.text(
+    #                     idx2,
+    #                     idx1,
+    #                     str(int(jj)),
+    #                     ha="center",
+    #                     va="center",
+    #                     color="black",
+    #                     fontsize=6,
+    #                     fontfamily="arial",
+    #                 )
+    #     for i22 in range(hm2.shape[0]):
+    #         axs.axhline(i22 - 0.5, color="black", linewidth=0.8)
+    #     # axs.set_title(titles[i], fontsize=6, fontfamily='arial')
+    #     axs.set_aspect("auto")
 
     # plt.suptitle(test_smarts, fontsize=6, fontfamily='arial')
-    plt.show()
+    # plt.show()
     # plt.savefig(title+"-heatmap.png", dpi=300, bbox_inches='tight', pad_inches=0.01)
 
     plt.close()
@@ -1249,6 +1321,6 @@ def generate(
     )
     nx.draw_networkx_edges(dgs, pos)
 
-    plt.savefig(title + "-tree.png", dpi=300, bbox_inches="tight", pad_inches=0.01)
+    # plt.savefig(title + "-tree.png", dpi=300, bbox_inches="tight", pad_inches=0.01)
 
-    # plt.show()
+    plt.show()

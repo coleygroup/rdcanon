@@ -60,11 +60,6 @@ No consolidation of atomic queries is performed via systematically replacing cer
 
 Isotope labels are not currently supported, nor is chirality or directionality beyond tetrahedral centers and cis/trans isomerism. 
 
-Bond queries that represent more than one bond type other than unspecified bonds (single or aromatic) 
-
-Finally, while the sequence of primitives is optimized within a recursive SMARTS, the sequence of atomic queries is not.
-
-These latter two points will likely be addressable if RDKit provided a way to modify query bonds with SMARTS.
 
 ### Manuscript Figures and Tests
 All data can be found in the manuscripts/data directory.
