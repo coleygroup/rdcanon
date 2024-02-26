@@ -56,10 +56,16 @@ To run all unit tests:
 
 
 ### Current Limitations
-No consolidation of atomic queries is performed via systematically replacing certain combinations of primitives with more concise or detailed representations (e.g. replacing [C;X4;+0] with [C;X4;H0;+0] or vice versa). 
+No consolidation or expansion of atomic queries is performed automatically, but a mechanism is provided to allow the user to systematically replace canonicalized atomic queries with an input dictionary (e.g., {"[O;H1]": "[O;H1;+0]"} would replace the canonicalized variant of [O;H1] with the canonicalized variant of [O;H1;+0]). 
 
-Isotope labels are not currently supported, nor is chirality or directionality beyond tetrahedral centers and cis/trans isomerism. 
+Replacement dictionaries should be processed first using 
+```python
+canon_repl_dict = gen_canon_repl_dict(repl_dict)
+```
 
+before passing as an argument into canon_smarts.
+
+Chirality or directionality beyond tetrahedral centers and cis/trans isomerism is not currently supported.
 
 ### Manuscript Figures and Tests
 All data can be found in the manuscripts/data directory.
