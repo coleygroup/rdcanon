@@ -232,7 +232,7 @@ class SMARTSTransformer(Transformer):
             if cur[0] == "!":
                 seq.append(cur[0])
                 continue
-            if cur in ["rec_start", "brack_start", "rec_end", "brack_end", "&", ","]:
+            if cur in ["rec_start", "brack_start", "rec_end", "brack_end", "&", ",", ";"]:
                 seq.append(cur)
                 continue
             if cur[0] == "open" or cur[0] == "close":
@@ -284,7 +284,7 @@ class SMARTSTransformer(Transformer):
             if r == "close":
                 tok = tok + ")"
                 continue
-            if r in ["=", "-", "#", "~", ":", ".", "@", "/", "!", "&", ","]:
+            if r in ["=", "-", "#", "~", ":", ".", "@", "/", "!", "&", ",", ";"]:
                 tok = tok + r
                 continue
             else:

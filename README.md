@@ -21,7 +21,7 @@ rdcanon is a package designed for canonicalizing SMARTS and Reaction SMARTS temp
 1. Create or activate a virtual environment.
 2. Clone the repository.
 3. Install the package with the command:
->pip install -e rdcanon2024
+>pip install -e rdcanon
 
 
 ## Usage
