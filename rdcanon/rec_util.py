@@ -60,7 +60,6 @@ class RecGraph:
         self.v = v
         self.recursive_compare = recursive_compare
         self.bond_indices_to_smarts = {}
-        self.bond_indices_to_chiral = {}
 
     def custom_key2(self, item1t, item2t):
         item1 = item1t["path_scores"]
@@ -75,22 +74,14 @@ class RecGraph:
         return self.recursive_compare(item1, item2)
 
     def graph_from_smarts(self, mol, order_token_canon, embedding):
-        for i,atom in enumerate(mol.GetAtoms()):
+        for i, atom in enumerate(mol.GetAtoms()):
             node_data = {
-                "symbol": atom.GetSymbol(),
-                "atomic_num": atom.GetAtomicNum(),
                 "smarts": atom.GetSmarts(),
                 "stereo": atom.GetChiralTag(),
-                "aromatic": atom.GetIsAromatic(),
-                "hybridization": atom.GetHybridization(),
             }
             n = RecNode(atom.GetIdx(), node_data)
 
-
-            sm, sc, _ = order_token_canon(
-                n.data["smarts"], None, embedding
-            )
-
+            sm, sc, _ = order_token_canon(n.data["smarts"], None, embedding)
 
             n.serialized_score = sc
             n.data["smarts"] = sm
@@ -141,12 +132,6 @@ class RecGraph:
                 )
                 self.bond_indices_to_smarts[(bond.index, node.index)] = (
                     node.bond_smarts[i]
-                )
-                self.bond_indices_to_chiral[(node.index, bond.index)] = (
-                    node.bond_stereo[i]
-                )
-                self.bond_indices_to_chiral[(bond.index, node.index)] = (
-                    node.bond_stereo[i]
                 )
 
     def find_hamiltonian_paths_iterative(self, start_node, best_seen):
@@ -243,16 +228,13 @@ class RecGraph:
 
         for r in all_paths:
             path_ar = []
-            # print(r)
             for rr in r:
-                # print(rr, rr[0])
                 path_ar.append(rr[0].serialized_score)
                 if rr[1] == None:
                     bond_v = "None"
                 else:
                     bond_v = rr[1].name
                 path_ar.append([bond_value_map[bond_v]])
-            # print(path_ar)
             all_paths_scored.append(
                 {
                     "path_scores": path_ar,
@@ -378,11 +360,6 @@ class RecGraph:
                     continue
                 added.append((node.index, bond.index))
 
-                # qbond = Chem.QueryBond()
-                # qbond.SetBeginAtom(old_map_to_new_map[node.index])
-                # qbond.SetEndAtom(old_map_to_new_map[bond.index])
-                # qbond.SetQuery(node.bond_smarts[i])
-                # mol.AddBond(qbond)
                 mol.AddBond(
                     old_map_to_new_map[node.index],
                     old_map_to_new_map[bond.index],
@@ -393,8 +370,6 @@ class RecGraph:
 
         og = Chem.MolToSmarts(mol)
         tmol = Chem.MolFromSmarts(og)
-
-        # print("original:", og)
 
         cw_ord = [0, 1, 2]
         ccw_ord = [0, 2, 1]

@@ -77,7 +77,6 @@ class Graph:
         self.top_score = 0
         self.v = v
         self.bond_indices_to_smarts = {}
-        self.bond_indices_to_chiral = {}
 
     def graph_from_smarts(self, smarts, embedding):
         mol = Chem.MolFromSmarts(smarts)
@@ -95,18 +94,12 @@ class Graph:
             print("token embeddings")
         for atom in mol.GetAtoms():
             node_data = {
-                "symbol": atom.GetSymbol(),
-                "atomic_num": atom.GetAtomicNum(),
-                "valence": atom.GetExplicitValence(),
                 "smarts": atom.GetSmarts(),
                 "stereo": atom.GetChiralTag(),
-                "aromatic": atom.GetIsAromatic(),
-                "hybridization": atom.GetHybridization(),
-                # Add other desired atom properties here
             }
             n = Node(atom.GetIdx(), node_data)
             atom_map = re.findall(r":\d+]", n.data["smarts"])
-            # print("incoming", n.data["smarts"])
+
             if len(atom_map) > 0:
                 sm, sc, _ = order_token_canon(
                     re.sub(r":\d+]", "]", n.data["smarts"]),
@@ -179,12 +172,6 @@ class Graph:
                 )
                 self.bond_indices_to_smarts[(bond.index, node.index)] = (
                     node.bond_smarts[i]
-                )
-                self.bond_indices_to_chiral[(node.index, bond.index)] = (
-                    node.bond_stereo[i]
-                )
-                self.bond_indices_to_chiral[(bond.index, node.index)] = (
-                    node.bond_stereo[i]
                 )
 
     def find_hamiltonian_paths_iterative(self, start_node, best_seen):
@@ -298,10 +285,7 @@ class Graph:
                 h.index, best_seen
             )
             best_seen = new_best_seen
-            # print(all_paths)
-            # for hjh in all_paths:
-            # print(hjh)
-            # print(len(all_paths))
+
             for r in all_paths:
                 path_ar = []
                 for rr in r:
@@ -409,7 +393,7 @@ class Graph:
         idxes_out = []
         new_map_to_old_map = {}
         atom_map_number_to_true_atom_map_number = {}
-        for node, bond, bond_smarts in dfs:
+        for node, bonde, bond_smarts in dfs:
             sm = node.data["smarts"]
             atom_map = re.findall(r":\d+", sm)
             if not mapping:
@@ -424,7 +408,6 @@ class Graph:
                     atom_map[0][1:]
                 )
 
-            # atom.SetIsotope(node.index)
             mol.AddAtom(atom)
             old_map_to_new_map[node.index] = i
             new_map_to_old_map[i] = node.index
@@ -440,23 +423,16 @@ class Graph:
                     continue
                 added.append((node.index, bond.index))
 
-                # qbond = Chem.QueryBond()
-                # qbond.SetBeginAtom(old_map_to_new_map[node.index])
-                # qbond.SetEndAtom(old_map_to_new_map[bond.index])
-                # qbond.SetQuery(node.bond_smarts[i])
-                # mol.AddBond(qbond)
                 mol.AddBond(
                     old_map_to_new_map[node.index],
                     old_map_to_new_map[bond.index],
                     node.bond_types[i],
                 )
-                bond = list(mol.GetBonds())[-1]
-                bond.SetBondDir(node.bond_stereo[i])
+                bond_added = list(mol.GetBonds())[-1]
+                bond_added.SetBondDir(node.bond_stereo[i])
 
         og = Chem.MolToSmarts(mol)
         tmol = Chem.MolFromSmarts(og)
-
-        # print("original:", og)
 
         cw_ord = [0, 1, 2]
         ccw_ord = [0, 2, 1]
@@ -621,7 +597,6 @@ class Graph:
                 bond_order.append(self.bond_indices_to_smarts[(this_node, next_node)])
 
         for i, r in enumerate(tmol.GetAtoms()):
-
             if mapping:
                 if r.GetAtomMapNum() in atom_map_number_to_true_atom_map_number:
                     new_map = atom_map_number_to_true_atom_map_number[r.GetAtomMapNum()]
@@ -634,10 +609,7 @@ class Graph:
                 if r.GetAtomMapNum() == 0:
                     r.ClearProp("molAtomMapNumber")
 
-            # print(r.GetSmarts(), r.GetSymbol(), r.GetChiralTag(), re.sub(r.GetSymbol(), r.GetSymbol() + "@", r.GetSmarts()))
-
             if str(r.GetChiralTag()) == "CHI_TETRAHEDRAL_CCW":
-
                 sm = re.sub(r.GetSymbol(), r.GetSymbol() + "@", r.GetSmarts())
                 if sm[0] == "[":
                     pass
@@ -658,22 +630,14 @@ class Graph:
             else:
                 node_order.append(r.GetSmarts())
 
-        # print()
-
         tmol_copy = Chem.MolFromSmarts(Chem.MolToSmarts(tmol))
         for r in tmol_copy.GetAtoms():
             if "molAtomMapNumber" in r.GetPropsAsDict():
                 r.ClearProp("molAtomMapNumber")
             if r.GetAtomMapNum() == 0:
                 r.ClearProp("molAtomMapNumber")
-            # print(r.GetSmarts())
-        self.unmapped_canon = Chem.MolToSmarts(tmol_copy)
-        # print(node_order)
-        # print(Chem.MolToSmarts(tmol))
 
-        # print(len(tmol.GetBonds()))
-        # print(len(bond_order))
-        # print(bond_order)
+        self.unmapped_canon = Chem.MolToSmarts(tmol_copy)
         final_out = Chem.MolFragmentToSmiles(
             tmol,
             atomsToUse=range(len(node_order)),
@@ -684,7 +648,6 @@ class Graph:
         )
 
         return final_out
-        # return Chem.MolToSmarts(tmol)
 
     def __repr__(self):
         return f"Graph({self.nodes})"
@@ -692,7 +655,13 @@ class Graph:
 
 class Reaction:
     def __init__(
-        self, input_reaction_smarts, mapping, embedding, remapping=False, v=False
+        self,
+        input_reaction_smarts,
+        mapping,
+        embedding,
+        remapping=False,
+        v=False,
+        repl_dict={},
     ):
         self.reactants = []
         self.agents = []
@@ -704,6 +673,7 @@ class Reaction:
         self.v = v
         self.index = 1
         self.index_map = {}
+        self.repl_dict = repl_dict
 
     def _load_reactants(self, k):
         for r in k.GetReactants():
@@ -720,6 +690,7 @@ class Reaction:
                     self.mapping,
                     self.embedding,
                     return_score=True,
+                    repl_dict=self.repl_dict,
                 )
 
                 grouped.append(
@@ -739,7 +710,6 @@ class Reaction:
                 san_sm_out = "(" + san_sm_out + ")"
                 unmapped_san_sm_out = "(" + unmapped_san_sm_out + ")"
 
-            # print(r_sm, san_sm_out, ts)
             self.reactants.append(
                 {
                     "path_scores": tss,
@@ -763,6 +733,7 @@ class Reaction:
                     self.mapping,
                     self.embedding,
                     return_score=True,
+                    repl_dict=self.repl_dict,
                 )
                 grouped.append(
                     {
@@ -803,6 +774,7 @@ class Reaction:
                     self.mapping,
                     self.embedding,
                     return_score=True,
+                    repl_dict=self.repl_dict,
                 )
                 grouped.append(
                     {
@@ -911,6 +883,7 @@ def canon_smarts(
     embedding="drugbank",
     return_score=False,
     v=False,
+    repl_dict={},
 ):
     """
     Canonicalizes a SMARTS pattern.
@@ -921,6 +894,7 @@ def canon_smarts(
         embedding (str, optional): The query primitive frequency dictionary to use. Defaults to "drugbank".
         return_score (bool, optional): Whether to return the top score. Defaults to False.
         v (bool, optional): Whether to enable verbose mode. Defaults to False.
+        repl_dict (dictionary, optional): A dictionary of SMARTS token replacements.
 
     Returns:
         str or tuple: The canonicalized SMARTS pattern. If `return_score` is True, a tuple containing the canonicalized SMARTS pattern,
@@ -929,16 +903,41 @@ def canon_smarts(
     g = Graph(v)
     g.graph_from_smarts(smarts, embedding)
     out = g.recreate_molecule(mapping)
+
+    for k in repl_dict:
+        out = out.replace(k, repl_dict[k])
+
     if return_score:
         return out, g.top_score, g.unmapped_canon
     return out
+
+
+def gen_canon_repl_dict(repl_dict, embedding="drugbank"):
+    """
+    Generate a canonical replacement dictionary based on a given replacement dictionary.
+
+    Parameters:
+        repl_dict (dict): A dictionary containing the replacement mappings.
+        embedding (str, optional): The embedding to be used for generating canonical SMILES. Defaults to "drugbank".
+
+    Returns:
+        dict: A dictionary containing the canonical replacement mappings.
+    """
+    repl_dict_nodes = {}
+    for k in repl_dict:
+        repl_dict_nodes[canon_smarts(k, embedding)[1:-1]] = canon_smarts(
+            repl_dict[k], embedding
+        )[1:-1]
+    return repl_dict_nodes
 
 
 def debug(smarts, mapping=False, embedding="drugbank", return_score=False):
     canon_smarts(smarts, mapping, embedding, return_score, True)
 
 
-def canon_reaction_smarts(smarts, mapping=False, embedding="drugbank", remapping=True):
+def canon_reaction_smarts(
+    smarts, mapping=False, embedding="drugbank", remapping=True, repl_dict={}
+):
     """
     Canonicalizes a reaction SMARTS string.
 
@@ -947,9 +946,11 @@ def canon_reaction_smarts(smarts, mapping=False, embedding="drugbank", remapping
         mapping (bool, optional): Whether to include atom mapping in the canonicalization. Defaults to False.
         embedding (str, optional): The embedding to use for the canonicalization. Defaults to "drugbank".
         remapping (bool, optional): Whether to remap atom indices after canonicalization. Defaults to True.
+        repl_dict (dictionary, optional): A dictionary of SMARTS token replacements.
 
     Returns:
         str: The canonicalized reaction SMARTS string.
     """
-    reaction = Reaction(smarts, mapping, embedding, remapping)
+
+    reaction = Reaction(smarts, mapping, embedding, remapping, repl_dict=repl_dict)
     return reaction.canonicalize_template()
