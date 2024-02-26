@@ -88,42 +88,42 @@ class RecGraph:
 
             self.nodes.append(n)
 
-        amol = Chem.MolFromSmarts("C:C")
-        abond = amol.GetBondWithIdx(0)
+        # amol = Chem.MolFromSmarts("C:C")
+        # abond = amol.GetBondWithIdx(0)
 
-        smol = Chem.MolFromSmarts("C-C")
-        sbond = smol.GetBondWithIdx(0)
+        # smol = Chem.MolFromSmarts("C-C")
+        # sbond = smol.GetBondWithIdx(0)
 
         for bond in mol.GetBonds():
             start_idx = bond.GetBeginAtomIdx()
             end_idx = bond.GetEndAtomIdx()
 
-            if bond.Match(abond) and bond.Match(sbond):
-                self.nodes[start_idx].add_bond(
-                    self.nodes[end_idx],
-                    rdkit.Chem.rdchem.BondType.UNSPECIFIED,
-                    bond.GetBondDir(),
-                    bond.GetSmarts(),
-                )
-                self.nodes[end_idx].add_bond(
-                    self.nodes[start_idx],
-                    rdkit.Chem.rdchem.BondType.UNSPECIFIED,
-                    bond.GetBondDir(),
-                    bond.GetSmarts(),
-                )
-            else:
-                self.nodes[start_idx].add_bond(
-                    self.nodes[end_idx],
-                    bond.GetBondType(),
-                    bond.GetBondDir(),
-                    bond.GetSmarts(),
-                )
-                self.nodes[end_idx].add_bond(
-                    self.nodes[start_idx],
-                    bond.GetBondType(),
-                    bond.GetBondDir(),
-                    bond.GetSmarts(),
-                )
+            # if bond.Match(abond) and bond.Match(sbond):
+            #     self.nodes[start_idx].add_bond(
+            #         self.nodes[end_idx],
+            #         rdkit.Chem.rdchem.BondType.UNSPECIFIED,
+            #         bond.GetBondDir(),
+            #         bond.GetSmarts(),
+            #     )
+            #     self.nodes[end_idx].add_bond(
+            #         self.nodes[start_idx],
+            #         rdkit.Chem.rdchem.BondType.UNSPECIFIED,
+            #         bond.GetBondDir(),
+            #         bond.GetSmarts(),
+            #     )
+            # else:
+            self.nodes[start_idx].add_bond(
+                self.nodes[end_idx],
+                bond.GetBondType(),
+                bond.GetBondDir(),
+                bond.GetSmarts(),
+            )
+            self.nodes[end_idx].add_bond(
+                self.nodes[start_idx],
+                bond.GetBondType(),
+                bond.GetBondDir(),
+                bond.GetSmarts(),
+            )
 
         for node in self.nodes:
             for i, bond in enumerate(node.bonds):
