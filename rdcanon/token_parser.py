@@ -14,6 +14,7 @@ from rdcanon.np_prims import prims as prims4
 import random
 from functools import cmp_to_key
 from rdcanon.rec_util import RecGraph
+import re
 
 
 # PRIMITIVE:  "D" | "H" | "h" | "R" | "r" | "v" | "X" | "x" | "-" | "+" | "#"
@@ -1129,15 +1130,18 @@ def order_token_canon(
 
             this_text = [r[1] for r in these_weights]
             first_atom_index = 0
+            pattern = r'#\d+'
             for idx, txt in enumerate(this_text):
-                if txt in ATOMS:
+                if txt in ATOMS or re.match(pattern, txt):
                     first_atom_index = idx
                     break
+
 
             this_text = moveToFront(this_text, first_atom_index)
             dg.nodes[node]["weights"] = moveToFront(
                 dg.nodes[node]["weights"], first_atom_index
             )
+
 
             op = dg.nodes[node]["label"]
 
