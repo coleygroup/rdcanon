@@ -7,7 +7,7 @@ from collections import deque
 from rdcanon.askcos_prims import prims as prims1
 import random
 from functools import cmp_to_key
-
+from rdkit.Chem.rdchem import BondType, BondDir, BondStereo
 
 bond_value_map = {
     "UNSPECIFIED": 1000,
@@ -77,12 +77,16 @@ class Graph:
         self.top_score = 0
         self.v = v
         self.bond_indices_to_smarts = {}
+        self.bond_indices_to_stereo = {}
+        self.bond_indices_to_relative_stereo = {}
 
     def graph_from_smarts(self, smarts, embedding):
         mol = Chem.MolFromSmarts(smarts)
         if not mol:
             raise ValueError("Invalid SMARTS provided")
         mol = Chem.MolFromSmarts(Chem.MolToSmarts(mol))
+
+        # print(Chem.MolToSmarts(mol))
 
         Chem.SanitizeMol(mol, sanitizeOps=Chem.SanitizeFlags.SANITIZE_NONE)
 
@@ -128,30 +132,13 @@ class Graph:
         if self.v:
             print()
 
-        amol = Chem.MolFromSmarts("C:C")
-        abond = amol.GetBondWithIdx(0)
-
-        smol = Chem.MolFromSmarts("C-C")
-        sbond = smol.GetBondWithIdx(0)
+        rdkit.Chem.rdmolops.FastFindRings(mol)
+        rdkit.Chem.rdmolops.FindPotentialStereoBonds(mol)
 
         for bond in mol.GetBonds():
             start_idx = bond.GetBeginAtomIdx()
             end_idx = bond.GetEndAtomIdx()
 
-            # if bond.Match(abond) and bond.Match(sbond):
-            #     self.nodes[start_idx].add_bond(
-            #         self.nodes[end_idx],
-            #         rdkit.Chem.rdchem.BondType.UNSPECIFIED,
-            #         bond.GetBondDir(),
-            #         bond.GetSmarts(),
-            #     )
-            #     self.nodes[end_idx].add_bond(
-            #         self.nodes[start_idx],
-            #         rdkit.Chem.rdchem.BondType.UNSPECIFIED,
-            #         bond.GetBondDir(),
-            #         bond.GetSmarts(),
-            #     )
-            # else:
             self.nodes[start_idx].add_bond(
                 self.nodes[end_idx],
                 bond.GetBondType(),
@@ -165,14 +152,66 @@ class Graph:
                 bond.GetSmarts(),
             )
 
-        for node in self.nodes:
-            for i, bond in enumerate(node.bonds):
-                self.bond_indices_to_smarts[(node.index, bond.index)] = (
-                    node.bond_smarts[i]
+            # print(
+            #     "bond:",
+            #     start_idx,
+            #     end_idx,
+            #     bond.GetBondType(),
+            #     bond.GetBondDir(),
+            #     bond.GetSmarts(),
+            #     bond.GetStereo(),
+            # )
+
+            self.bond_indices_to_stereo[(start_idx, end_idx)] = bond.GetStereo()
+            self.bond_indices_to_stereo[(end_idx, start_idx)] = bond.GetStereo()
+
+            bond_a = None
+            bond_b = None
+
+            if bond.GetStereo() != Chem.rdchem.BondStereo.STEREONONE:
+
+                atom = mol.GetAtomWithIdx(start_idx)
+                neighbors = atom.GetNeighbors()
+
+                for neighbor in neighbors:
+                    if (
+                        mol.GetBondBetweenAtoms(
+                            start_idx, neighbor.GetIdx()
+                        ).GetBondDir()
+                        == Chem.rdchem.BondDir.ENDUPRIGHT
+                        or mol.GetBondBetweenAtoms(
+                            start_idx, neighbor.GetIdx()
+                        ).GetBondDir()
+                        == Chem.rdchem.BondDir.ENDDOWNRIGHT
+                    ):
+                        bond_a = neighbor.GetIdx()
+                        break
+
+                atom = mol.GetAtomWithIdx(end_idx)
+                neighbors = atom.GetNeighbors()
+
+                for neighbor in neighbors:
+                    if (
+                        mol.GetBondBetweenAtoms(end_idx, neighbor.GetIdx()).GetBondDir()
+                        == Chem.rdchem.BondDir.ENDUPRIGHT
+                        or mol.GetBondBetweenAtoms(
+                            end_idx, neighbor.GetIdx()
+                        ).GetBondDir()
+                        == Chem.rdchem.BondDir.ENDDOWNRIGHT
+                    ):
+                        bond_b = neighbor.GetIdx()
+                        break
+
+            if bond_a is not None and bond_b is not None:
+                self.bond_indices_to_relative_stereo[(bond_a, bond_b)] = (
+                    bond.GetStereo()
                 )
-                self.bond_indices_to_smarts[(bond.index, node.index)] = (
-                    node.bond_smarts[i]
+                self.bond_indices_to_relative_stereo[(bond_b, bond_a)] = (
+                    bond.GetStereo()
                 )
+
+            self.bond_indices_to_smarts[(start_idx, end_idx)] = bond.GetSmarts()
+            self.bond_indices_to_smarts[(end_idx, start_idx)] = bond.GetSmarts()
 
     def find_hamiltonian_paths_iterative(self, start_node, best_seen):
         paths = []
@@ -428,11 +467,119 @@ class Graph:
                     old_map_to_new_map[bond.index],
                     node.bond_types[i],
                 )
-                bond_added = list(mol.GetBonds())[-1]
-                bond_added.SetBondDir(node.bond_stereo[i])
 
         og = Chem.MolToSmarts(mol)
         tmol = Chem.MolFromSmarts(og)
+
+        bond_order = []
+        bonds_set_equal = []
+        bonds_set_trans = []
+        for bond in tmol.GetBonds():
+            bond_order.append(
+                self.bond_indices_to_smarts[
+                    (
+                        tmol.GetAtomWithIdx(bond.GetBeginAtomIdx()).GetAtomMapNum(),
+                        tmol.GetAtomWithIdx(bond.GetEndAtomIdx()).GetAtomMapNum(),
+                    )
+                ]
+            )
+            if bond.GetBondType() == BondType.DOUBLE:
+                start_atom = tmol.GetAtomWithIdx(bond.GetBeginAtomIdx())
+                end_atom = tmol.GetAtomWithIdx(bond.GetEndAtomIdx())
+
+                start_rs = []
+                end_rs = []
+                for nene in start_atom.GetNeighbors():
+                    if nene.GetIdx() == end_atom.GetIdx():
+                        continue
+                    start_rs.append(nene.GetAtomMapNum())
+                for nene in end_atom.GetNeighbors():
+                    if nene.GetIdx() == start_atom.GetIdx():
+                        continue
+                    end_rs.append(nene.GetAtomMapNum())
+
+                all_r_combos = []
+                for i in start_rs:
+                    for j in end_rs:
+                        all_r_combos.append((i, j))
+
+                for r in all_r_combos:
+                    if r in self.bond_indices_to_relative_stereo:
+                        if (
+                            self.bond_indices_to_relative_stereo[r]
+                            == BondStereo.STEREOCIS
+                        ):
+                            if r[0] in start_rs:
+                                bond_a = tmol.GetBondBetweenAtoms(
+                                    start_atom.GetIdx(), old_map_to_new_map[r[0]]
+                                ).GetIdx()
+                                bond_b = tmol.GetBondBetweenAtoms(
+                                    end_atom.GetIdx(), old_map_to_new_map[r[1]]
+                                ).GetIdx()
+                            else:
+                                bond_a = tmol.GetBondBetweenAtoms(
+                                    start_atom.GetIdx(), old_map_to_new_map[r[1]]
+                                ).GetIdx()
+                                bond_b = tmol.GetBondBetweenAtoms(
+                                    end_atom.GetIdx(), old_map_to_new_map[r[0]]
+                                ).GetIdx()
+                            bonds_set_equal.append((bond_a, bond_b))
+                        elif (
+                            self.bond_indices_to_relative_stereo[r]
+                            == BondStereo.STEREOTRANS
+                        ):
+                            if r[0] in start_rs:
+                                bond_a = tmol.GetBondBetweenAtoms(
+                                    start_atom.GetIdx(), old_map_to_new_map[r[0]]
+                                ).GetIdx()
+                                bond_b = tmol.GetBondBetweenAtoms(
+                                    end_atom.GetIdx(), old_map_to_new_map[r[1]]
+                                ).GetIdx()
+                            else:
+                                bond_a = tmol.GetBondBetweenAtoms(
+                                    start_atom.GetIdx(), old_map_to_new_map[r[1]]
+                                ).GetIdx()
+                                bond_b = tmol.GetBondBetweenAtoms(
+                                    end_atom.GetIdx(), old_map_to_new_map[r[0]]
+                                ).GetIdx()
+                            bonds_set_trans.append((bond_a, bond_b))
+
+        for bond in bonds_set_equal:
+            bond_order[bond[0]] = "\\"
+            bond_order[bond[1]] = "/"
+            tmol.GetBondWithIdx(bond[0]).SetBondDir(BondDir.ENDDOWNRIGHT)
+            tmol.GetBondWithIdx(bond[1]).SetBondDir(BondDir.ENDUPRIGHT)
+
+        for bond in bonds_set_trans:
+            bond_order[bond[0]] = "/"
+            bond_order[bond[1]] = "/"
+            tmol.GetBondWithIdx(bond[0]).SetBondDir(BondDir.ENDUPRIGHT)
+            tmol.GetBondWithIdx(bond[1]).SetBondDir(BondDir.ENDUPRIGHT)
+
+        rdkit.Chem.rdmolops.FastFindRings(tmol)
+        rdkit.Chem.rdmolops.SetBondStereoFromDirections(tmol)
+
+        for bond in tmol.GetBonds():
+            true_stereo = self.bond_indices_to_stereo[
+                (
+                    tmol.GetAtomWithIdx(bond.GetBeginAtomIdx()).GetAtomMapNum(),
+                    tmol.GetAtomWithIdx(bond.GetEndAtomIdx()).GetAtomMapNum(),
+                )
+            ]
+            assigned_stereo = bond.GetStereo()
+
+            if true_stereo != assigned_stereo:
+                start_atom = tmol.GetAtomWithIdx(bond.GetBeginAtomIdx())
+                for nene in start_atom.GetNeighbors():
+                    target_bond = tmol.GetBondBetweenAtoms(
+                        start_atom.GetIdx(), nene.GetIdx()
+                    )
+                    if target_bond.GetBondDir() == BondDir.ENDUPRIGHT:
+                        bond_order[target_bond.GetIdx()] = "\\"
+                        break
+                    elif target_bond.GetBondDir() == BondDir.ENDDOWNRIGHT:
+                        bond_order[target_bond.GetIdx()] = "/"
+                        break
 
         cw_ord = [0, 1, 2]
         ccw_ord = [0, 2, 1]
@@ -576,26 +723,6 @@ class Graph:
                             )
 
         node_order = []
-        bond_order = []
-        seen_bonds = []
-        for i, r in enumerate(tmol.GetBonds()):
-
-            this_node = tmol.GetAtomWithIdx(r.GetBeginAtomIdx()).GetAtomMapNum()
-            next_node = tmol.GetAtomWithIdx(r.GetEndAtomIdx()).GetAtomMapNum()
-
-            if (this_node, next_node) in seen_bonds or (
-                next_node,
-                this_node,
-            ) in seen_bonds:
-                continue
-            seen_bonds.append((this_node, next_node))
-            if str(r.GetBondDir()) == "ENDDOWNRIGHT":
-                bond_order.append("\\")
-            elif str(r.GetBondDir()) == "ENDUPRIGHT":
-                bond_order.append("/")
-            else:
-                bond_order.append(self.bond_indices_to_smarts[(this_node, next_node)])
-
         for i, r in enumerate(tmol.GetAtoms()):
             if mapping:
                 if r.GetAtomMapNum() in atom_map_number_to_true_atom_map_number:
@@ -630,14 +757,6 @@ class Graph:
             else:
                 node_order.append(r.GetSmarts())
 
-        tmol_copy = Chem.MolFromSmarts(Chem.MolToSmarts(tmol))
-        for r in tmol_copy.GetAtoms():
-            if "molAtomMapNumber" in r.GetPropsAsDict():
-                r.ClearProp("molAtomMapNumber")
-            if r.GetAtomMapNum() == 0:
-                r.ClearProp("molAtomMapNumber")
-
-        self.unmapped_canon = Chem.MolToSmarts(tmol_copy)
         final_out = Chem.MolFragmentToSmiles(
             tmol,
             atomsToUse=range(len(node_order)),
@@ -647,6 +766,15 @@ class Graph:
             canonical=False,
         )
 
+        tmol_copy = Chem.MolFromSmarts(final_out)
+        for r in tmol_copy.GetAtoms():
+            if "molAtomMapNumber" in r.GetPropsAsDict():
+                r.ClearProp("molAtomMapNumber")
+            if r.GetAtomMapNum() == 0:
+                r.ClearProp("molAtomMapNumber")
+
+        self.unmapped_canon = Chem.MolToSmarts(tmol_copy)
+        # final_out = Chem.MolToSmarts(Chem.MolFromSmarts(final_out))
         return final_out
 
     def __repr__(self):

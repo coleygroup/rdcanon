@@ -101,11 +101,11 @@ class TestRegularSmarts(absltest.TestCase):
         isomers = [
             "C(=C/O)\C-C(=C-[C@@](-Br)(-Cl)-[H1@&C](-B)(-P)-O)-C",
             "C(\O)=C/C-C(=C-[C@@](-[C@@&H1](-B)(-O)-P)(-Br)-Cl)-C",
-            "Br-[C@](-Cl)(-[H1@@&C](-B)(-O)-P)-C=C(-C)-C/C=C\O",
-            "C(-C)(-C/C=C\O)=C-[C@](-Br)(-[C@&H1](-B)(-P)-O)-Cl",
-            "O/C=C\C-C(=C-[C@](-[H1@&C](-B)(-P)-O)(-Cl)-Br)-C",
-            "C(=C-[C@](-Br)(-[H1@@&C](-B)(-O)-P)-Cl)(-C/C=C\O)-C",
-            "B-[H1@&C](-[C@](-Br)(-Cl)-C=C(-C)-C/C=C\O)(-O)-P",
+            "Br-[C@](-Cl)(-[H1@@&C](-B)(-O)-P)-C=C(-C)-C\C=C\O",
+            "C(-C)(-C\C=C\O)=C-[C@](-Br)(-[C@&H1](-B)(-P)-O)-Cl",
+            "O\C=C\C-C(=C-[C@](-[H1@&C](-B)(-P)-O)(-Cl)-Br)-C",
+            "C(=C-[C@](-Br)(-[H1@@&C](-B)(-O)-P)-Cl)(-C/C=C/O)-C",
+            "B-[H1@&C](-[C@](-Br)(-Cl)-C=C(-C)-C/C=C/O)(-O)-P",
         ]
         self.assertTrue(len(set([canon_smarts(s) for s in isomers])) == 1)
 
