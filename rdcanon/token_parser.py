@@ -1,7 +1,6 @@
 import hashlib
 from collections import deque
 import networkx as nx
-from rdkit import Chem
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib import gridspec
@@ -11,7 +10,6 @@ from rdcanon.askcos_prims import prims as prims1
 from rdcanon.pubchem_prims import prims as prims2
 from rdcanon.drugbank_prims_with_nots import prims as prims3
 from rdcanon.np_prims import prims as prims4
-import random
 from functools import cmp_to_key
 from rdcanon.rec_util import RecGraph
 import re
@@ -216,6 +214,444 @@ ATOMS = [
 ]
 
 
+class SMARTSTransformer2(Transformer):
+    # not used currently
+    def start(self, args):
+        results = []
+
+        stack = deque()
+
+        stack.append(args[0])
+
+        seq = []
+        while len(stack) > 0:
+            cur = stack.popleft()
+            if cur[0] == "deg":
+                seq.append(cur)
+                continue
+            if cur[0] == "!":
+                seq.append(cur[0])
+                continue
+            if cur in [
+                "rec_start",
+                "brack_start",
+                "rec_end",
+                "brack_end",
+                "&",
+                ",",
+                ";",
+            ]:
+                seq.append(cur)
+                continue
+            if cur[0] == "open" or cur[0] == "close":
+                seq.append(cur[0])
+            if cur[0] == "component":
+                seq.append(cur[1])
+                continue
+            if cur[0] == "bond":
+                seq.append(cur[1])
+                continue
+            if cur[0] == "iso":
+                seq.append(cur)
+                continue
+            if cur[0] == "nested":
+                stack.appendleft("rec_start")
+            if cur[0] == "bracketed":
+                stack.appendleft("brack_start")
+            for r in cur[1]:
+                stack.appendleft(r)
+            if cur[0] == "bracketed":
+                stack.appendleft("brack_end")
+            if cur[0] == "nested":
+                stack.appendleft("rec_end")
+
+        tok = ""
+        for r in reversed(seq):
+            if r[0] == "iso":
+                tok = tok + r[1][0] + "*"
+                continue
+            if len(r) == 2:
+                if r[0] == "deg":
+                    tok = tok + str(r[1])
+                    continue
+            if r == "brack_start":
+                tok = tok + "["
+                continue
+            if r == "brack_end":
+                tok = tok + "]"
+                continue
+            if r == "rec_start":
+                tok = tok + "$("
+                continue
+            if r == "rec_end":
+                tok = tok + ")"
+                continue
+            if r == "open":
+                tok = tok + "("
+                continue
+            if r == "close":
+                tok = tok + ")"
+                continue
+            if r in ["=", "-", "#", "~", ":", ".", "@", "/", "\\", "!", "&", ",", ";"]:
+                tok = tok + r
+                continue
+            else:
+                for k in r:
+                    if k[0] == "!":
+                        tok = tok + k[0]
+                    if k[0] == "atom":
+                        for r2 in k[1]:
+                            tok = tok + r2[1]
+                    else:
+                        for r2 in k[1]:
+                            tok = tok + r2
+
+        # if tok[0] == "[" and tok[-1] == "]":
+        # tok = tok[1:-1]
+
+        tok = tok[2:-1]
+
+        # print("kek", tok)
+        if tok[0] == "$":
+            return tok, []
+
+        # print(tok)
+
+        atoms_in_seq = []
+        bonds_in_seq = []
+        cur_atom = ""
+        cur_bond = ""
+        reading = False
+        atom_map = False
+        rec = False
+        nn = 0
+        for r in reversed(seq):
+            if nn == 0:
+                nn = nn + 1
+                continue
+            # print("a", r, cur_atom, rec)
+            if atom_map and r != "brack_end":
+                cur_atom = cur_atom + r[1]
+                atom_map = False
+                continue
+            if r == "rec_start":
+                cur_atom = cur_atom + "$("
+                # reading = True
+                rec = True
+                continue
+            if r == "brack_start":
+                if not rec:
+                    if cur_bond != "":
+                        bonds_in_seq.append(cur_bond)
+                    cur_bond = ""
+                    reading = True
+                    continue
+                else:
+                    cur_atom = cur_atom + "["
+                    continue
+
+            if r == "brack_end":
+                if not rec:
+                    if atom_map:
+                        atom_map = False
+                    reading = False
+                    if cur_atom != "":
+                        atoms_in_seq.append(cur_atom)
+                    cur_atom = ""
+                    continue
+                else:
+                    cur_atom = cur_atom + "]"
+                    continue
+
+            if r == "rec_end":
+                cur_atom = cur_atom + ")"
+                # reading = False
+                rec = False
+                continue
+
+            # print(reading)
+            bond_symbs = ["-", "=", "#", "~", ":", ".", "@", "/", "\\"]
+            op_symbs = ["!", "&", ",", ";"]
+
+            if reading == False:
+                # print("b", r)
+                if r in op_symbs or r in bond_symbs:
+                    cur_bond = cur_bond + r
+                    continue
+                if type(r[0]) == tuple and len(r) == 1:
+                    if r[0][1][0][1][0] in bond_symbs:
+                        cur_bond = cur_bond + r[0][1][0][1][0]
+                        continue
+                    cur_atom = cur_atom + r[0][1][0][1][0]
+                    if cur_bond != "":
+                        bonds_in_seq.append(cur_bond)
+                        cur_bond = ""
+                    atoms_in_seq.append(cur_atom)
+                    cur_atom = ""
+                    continue
+                elif type(r[0]) == tuple and len(r) == 2:
+                    cur_bond = cur_bond + r[0][1][0]
+                    cur_atom = cur_atom + r[1][1][0][1][0]
+
+                    bonds_in_seq.append(cur_bond)
+                    cur_bond = ""
+
+                    atoms_in_seq.append(cur_atom)
+                    cur_atom = ""
+                    continue
+
+                else:
+                    if r == "open":
+                        continue
+                    if r == "close":
+                        continue
+                    if r[0] == "deg" or r[0] == "bond":
+                        cur_bond = cur_bond + r[1][0]
+                        continue
+            # # if reading:
+            # print(r)
+            # cur_atom = cur_atom + r[0]
+
+            if (
+                r == ";"
+                or r == ":"
+                or r == ","
+                or r == "&"
+                or r == "!"
+                or r == "open"
+                or r == "close"
+                or r in bond_symbs
+            ):
+                if r == ":" and not rec:
+                    atom_map = True
+                if rec and r == "open":
+                    cur_atom = cur_atom + "("
+                    continue
+                if rec and r == "close":
+                    cur_atom = cur_atom + ")"
+                    continue
+                if rec and r in bond_symbs:
+                    cur_atom = cur_atom + r
+                    continue
+                if not rec:
+                    cur_atom = cur_atom + r
+                    continue
+
+            if r[0] == "deg":
+                cur_atom = cur_atom + r[1]
+                continue
+            # print("c",r)
+                
+            if rec and r in op_symbs:
+                cur_atom = cur_atom + r
+                continue
+
+
+            result = {
+                "!": -1,
+                "D": -1,
+                "H": -1,
+                "h": -1,
+                "R": -1,
+                "r": -1,
+                "v": -1,
+                "X": -1,
+                "x": -1,
+                "-": -1,
+                "+": -1,
+                "#": -1,
+                "*": -1,
+                "a": -1,
+                "A": -1,
+                "@": -1,
+                "@@": -1,
+                "bond": -1,
+                "rec": -1,
+                "C": -1,
+                "N": -1,
+                "O": -1,
+                "o": -1,
+                "c": -1,
+                "n": -1,
+                "S": -1,
+                "s": -1,
+                "P": -1,
+                "p": -1,
+                "B": -1,
+                "b": -1,
+                "F": -1,
+                "I": -1,
+                "Cl": -1,
+                "Br": -1,
+                "Se": -1,
+                "Si": -1,
+                "Sn": -1,
+                "As": -1,
+                "Te": -1,
+                "Pb": -1,
+                "Zn": -1,
+                "Cu": -1,
+                "Fe": -1,
+                "Mg": -1,
+                "Na": -1,
+                "Ca": -1,
+                "Al": -1,
+                "K": -1,
+                "Li": -1,
+                "Mn": -1,
+                "Zr": -1,
+                "Co": -1,
+                "Ni": -1,
+                "Cd": -1,
+                "Ag": -1,
+                "Au": -1,
+                "Pt": -1,
+                "Pd": -1,
+                "Ru": -1,
+                "Rh": -1,
+                "Ir": -1,
+                "Ti": -1,
+                "V": -1,
+                "W": -1,
+                "Mo": -1,
+                "Hg": -1,
+                "Tl": -1,
+                "Bi": -1,
+                "Ba": -1,
+                "Sr": -1,
+                "Cs": -1,
+                "Rb": -1,
+                "Be": -1,
+                "se": -1,
+                "te": -1,
+                "iso": -1,
+            }
+
+            if r[0] == "iso":
+                result["iso"] = r[1][0]
+                results.append(result)
+                cur_atom = cur_atom + r[1][0] + "*"
+                continue
+
+            if len(r) == 2:
+                result["bond"] = str(r[0][1])
+                atms = r[1][1]
+            else:
+                atms = r[0][1]
+
+            if rec:
+                if atms[0][1][0] in bond_symbs:
+                    if len(atms) == 1:
+                        cur_atom = cur_atom + atms[0][1][0]
+                    else:
+                        cur_atom = cur_atom + atms[0][1][0]
+                        cur_atom = cur_atom + atms[1][1][0]
+                    continue
+
+            deg_found = False
+            prev_prim = False
+            for rr in atms:
+
+                if rr[0] == "!":
+                    result["!"] = True
+                    continue
+                if prev_prim and rr[0] != "deg":
+                    if k == "R" or k == "h" or k == "r" or k == "x":
+                        result[k] = "default"
+                    else:
+                        result[k] = 1
+                    deg_found = True
+                if rr[0] == "prim":
+                    k = rr[1]
+                    prev_prim = True
+                    deg_found = False
+                elif rr[0] == "deg":
+                    deg_found = True
+                    if result[k] == -1:
+                        result[k] = int(rr[1])
+                    else:
+                        result[k] = result[k] + int(rr[1])
+                    prev_prim = False
+            if not deg_found:
+                if result[k] == -1:
+                    if k == "R" or k == "h" or k == "r" or k == "x":
+                        result[k] = "default"
+                    else:
+                        result[k] = 1
+                else:
+                    result[k] = result[k] + 1
+            # print(k, result[k])
+
+            cur_atom = cur_atom + parse_label(result)
+            # print(cur_atom)
+
+            results.append(result)
+        return atoms_in_seq, bonds_in_seq
+
+    def isotope(self, args):
+        return "iso", args
+
+    def not1(self, args):
+        return "!", args[0]  # Returning '!' to indicate its presence
+
+    def not2(self, args):
+        return "!", args  # Returning '!' to indicate its presence
+
+    def symbol(self, args):
+        return "prim", args[0]
+
+    def symbol_single(self, args):
+        return "prim", args[0]
+
+    def degree1(self, args):
+        return "deg", args[0]
+
+    def nested_rule(self, args):
+        return "nested", args
+
+    def item(self, args):
+        return "item", args
+
+    def component(self, args):
+        return "component", args
+
+    def atom(self, args):
+        return "atom", args
+
+    def token(self, args):
+        return "token", args
+
+    def operator_symbol(self, args):
+        return "op", args[0]
+
+    def bond_symbol(self, args):
+        return "bond", args[0]
+
+    def open(self, args):
+        return "open", args
+
+    def close(self, args):
+        return "close", args
+
+    def bracketed_rule(self, args):
+        return "bracketed", args
+
+    def BOND_PRIMITIVE(self, args):
+        return args
+
+    def PRIMITIVE(self, args):
+        return args
+
+    def DIGIT(self, args):
+        return args
+
+    def NOT(self, args):
+        return args
+
+    def OPERATOR_PRIMITIVE(self, args):
+        return args
+
+
 class SMARTSTransformer(Transformer):
     def start(self, args):
         results = []
@@ -233,7 +669,15 @@ class SMARTSTransformer(Transformer):
             if cur[0] == "!":
                 seq.append(cur[0])
                 continue
-            if cur in ["rec_start", "brack_start", "rec_end", "brack_end", "&", ",", ";"]:
+            if cur in [
+                "rec_start",
+                "brack_start",
+                "rec_end",
+                "brack_end",
+                "&",
+                ",",
+                ";",
+            ]:
                 seq.append(cur)
                 continue
             if cur[0] == "open" or cur[0] == "close":
@@ -575,9 +1019,7 @@ class SMARTSTransformer(Transformer):
         return args
 
 
-def split_smarts_f(input_smarts):
-    tsmarts = Chem.MolFromSmarts(input_smarts)
-    out_sm = Chem.MolToSmarts(tsmarts)
+def split_smarts_f(out_sm):
     if out_sm[0] == "[" and out_sm[-1] == "]":
         deb = out_sm[1:-1]
     else:
@@ -818,7 +1260,7 @@ def gen_data_substructure(tree_in, digraph, prims):
                     inc = 1
                 else:
                     inc = 0
-                mm_rec = Chem.MolFromSmarts(tok[2 + inc : -1])
+                mm_rec = tok[2 + inc : -1]
                 if inc:
                     rg = RecGraph(recursive_compare)
                     rg.graph_from_smarts(mm_rec, order_token_canon, prims)
@@ -939,7 +1381,7 @@ symbol_multi: PRIMITIVE_MULTI
 
 bond_symbol: BOND_PRIMITIVE
 
-BOND_PRIMITIVE: "-" | "=" | "#" | "~" | ":" | "." | "@" | "/"
+BOND_PRIMITIVE: "-" | "=" | "#" | "~" | ":" | "." | "@" | "/" | "\\\\"
 
 operator_symbol: OPERATOR_PRIMITIVE
 
@@ -956,6 +1398,16 @@ DIGIT: "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
 
 parser = Lark(grammar, parser="lalr")
 transformer = SMARTSTransformer()
+
+transformer2 = SMARTSTransformer2()  # not used currently
+
+
+def parse_smarts_total(in_smarts):
+    # not used currently
+    parsed = parser.parse("[$(" + in_smarts + ")]")
+    atoms_seq, bonds_seq = transformer2.transform(parsed)
+    return atoms_seq, bonds_seq
+    # print(atoms_seq, bonds_seq)
 
 
 def recursive_compare(list1, list2):
@@ -1130,18 +1582,16 @@ def order_token_canon(
 
             this_text = [r[1] for r in these_weights]
             first_atom_index = 0
-            pattern = r'#\d+'
+            pattern = r"#\d+"
             for idx, txt in enumerate(this_text):
                 if txt in ATOMS or re.match(pattern, txt):
                     first_atom_index = idx
                     break
 
-
             this_text = moveToFront(this_text, first_atom_index)
             dg.nodes[node]["weights"] = moveToFront(
                 dg.nodes[node]["weights"], first_atom_index
             )
-
 
             op = dg.nodes[node]["label"]
 
