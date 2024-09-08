@@ -149,6 +149,45 @@ labels = [
     "Be",
     "se",
     "te",
+    "La",
+    "Er",
+    "Tm",
+    "Yb",
+    "Lu",
+    "Hf",
+    "Ta",
+    "W",
+    "Re",
+    "Co",
+    "Os",
+    "Re",
+    "Ga",
+    "Ge",
+    "Y",
+    "Ce",
+    "Pr",
+    "Nd",
+    "Sm",
+    "Eu",
+    "Gd",
+    "Tb",
+    "Dy",
+    "Ho",
+    "Th",
+    "Pa",
+    "Mo",
+    "U",
+    "Tc",
+    "At",
+    "Am",
+    "Bk",
+    "Cf",
+    "Cm",
+    "He",
+    "Ne",
+    "Pm",
+    "Pu",
+    "Xe"
 ]
 
 ATOMS = [
@@ -211,11 +250,49 @@ ATOMS = [
     "Be",
     "se",
     "te",
+    "La",
+    "Er",
+    "Tm",
+    "Yb",
+    "Lu",
+    "Hf",
+    "Ta",
+    "W",
+    "Re",
+    "Co",
+    "Os",
+    "Re",
+    "Ga",
+    "Ge",
+    "Y",
+    "Ce",
+    "Pr",
+    "Nd",
+    "Sm",
+    "Eu",
+    "Gd",
+    "Tb",
+    "Dy",
+    "Ho",
+    "Th",
+    "Pa",
+    "Mo",
+    "U",
+    "Tc",
+    "At",
+    "Am",
+    "Bk",
+    "Cf",
+    "Cm",
+    "He",
+    "Ne",
+    "Pm",
+    "Pu",
+    "Xe"
 ]
 
 
 class SMARTSTransformer2(Transformer):
-    # not used currently
     def start(self, args):
         results = []
 
@@ -325,6 +402,7 @@ class SMARTSTransformer2(Transformer):
         atom_map = False
         rec = False
         nn = 0
+        # print(seq)
         for r in reversed(seq):
             if nn == 0:
                 nn = nn + 1
@@ -441,11 +519,10 @@ class SMARTSTransformer2(Transformer):
                 cur_atom = cur_atom + r[1]
                 continue
             # print("c",r)
-                
+
             if rec and r in op_symbs:
                 cur_atom = cur_atom + r
                 continue
-
 
             result = {
                 "!": -1,
@@ -524,6 +601,45 @@ class SMARTSTransformer2(Transformer):
                 "Be": -1,
                 "se": -1,
                 "te": -1,
+                "La": -1,
+                "Er": -1,
+                "Tm": -1,
+                "Yb": -1,
+                "Lu": -1,
+                "Hf": -1,
+                "Ta": -1,
+                "W" : -1,
+                "Re": -1,
+                "Co": -1,
+                "Os": -1,
+                "Re": -1,
+                "Ga": -1,
+                "Ge": -1,
+                "Y": -1,
+                "Ce": -1,
+                "Pr": -1,
+                "Nd": -1,
+                "Sm": -1,
+                "Eu": -1,
+                "Gd": -1,
+                "Tb": -1,
+                "Dy": -1,
+                "Ho": -1,
+                "Th": -1,
+                "Pa": -1,
+                "Mo": -1,
+                "U": -1,
+                "Tc": -1,
+                "At": -1,
+                "Am": -1,
+                "Bk": -1,
+                "Cf": -1,
+                "Cm": -1,
+                "He": -1,
+                "Ne": -1,
+                "Pm": -1,
+                "Pu": -1,
+                "Xe": -1,
                 "iso": -1,
             }
 
@@ -825,6 +941,45 @@ class SMARTSTransformer(Transformer):
                     "Be": -1,
                     "se": -1,
                     "te": -1,
+                    "La": -1,
+                    "Er": -1,
+                    "Tm": -1,
+                    "Yb": -1,
+                    "Lu": -1,
+                    "Hf": -1,
+                    "Ta": -1,
+                    "W": -1,
+                    "Re": -1,
+                    "Co": -1,
+                    "Os": -1,
+                    "Re": -1,
+                    "Ga": -1,
+                    "Ge": -1,
+                    "Y": -1,
+                    "Ce": -1,
+                    "Pr": -1,
+                    "Nd": -1,
+                    "Sm": -1,
+                    "Eu": -1,
+                    "Gd": -1,
+                    "Tb": -1,
+                    "Dy": -1,
+                    "Ho": -1,
+                    "Th": -1,
+                    "Pa": -1,
+                    "Mo": -1,
+                    "U": -1,
+                    "Tc": -1,
+                    "At": -1,
+                    "Am": -1,
+                    "Bk": -1,
+                    "Cf": -1,
+                    "Cm": -1,
+                    "He": -1,
+                    "Ne": -1,
+                    "Pm": -1,
+                    "Pu": -1,
+                    "Xe": -1,
                     "iso": -1,
                 }
 
@@ -949,6 +1104,45 @@ class SMARTSTransformer(Transformer):
                 "Be": -1,
                 "se": -1,
                 "te": -1,
+                "La": -1,
+                "Er": -1,
+                "Tm": -1,
+                "Yb": -1,
+                "Lu": -1,
+                "Hf": -1,
+                "Ta": -1,
+                "W": -1,
+                "Re": -1,
+                "Co": -1,
+                "Os": -1,
+                "Re": -1,
+                "Ga": -1,
+                "Ge": -1,
+                "Y": -1,
+                "Ce": -1,
+                "Pr": -1,
+                "Nd": -1,
+                "Sm": -1,
+                "Eu": -1,
+                "Gd": -1,
+                "Tb": -1,
+                "Dy": -1,
+                "Ho": -1,
+                "Th": -1,
+                "Pa": -1,
+                "Mo": -1,
+                "U": -1,
+                "Tc": -1,
+                "At": -1,
+                "Am": -1,
+                "Bk": -1,
+                "Cf": -1,
+                "Cm": -1,
+                "He": -1,
+                "Ne": -1,
+                "Pm": -1,
+                "Pu": -1,
+                "Xe": -1,
                 "iso": -1,
             }
             results.append(result)
@@ -1365,6 +1559,9 @@ PRIMITIVE:  "D" | "H" | "h" | "R" | "r" | "v" | "X" | "x" | "-" | "+" | "#"
                 | "Se" | "Si" | "Sn" | "As" | "Te" | "Pb" | "Zn" | "Cu" | "Fe" | "Mg" | "Na" | "Ca" | "Al"
                 | "K" | "Li" | "Mn" | "Zr" | "Co" | "Ni" | "Cd" | "Ag" | "Au" | "Pt" | "Pd" | "Ru" | "Rh"
                 | "Ir" | "Ti" | "V" | "W" | "Mo" | "Hg" | "Tl" | "Bi" | "Ba" | "Sr" | "Cs" | "Rb" | "Be" | "se" | "te"
+                | "La" | "Er" | "Tm" | "Yb" | "Lu" | "Hf" | "Ta" | "W" | "Re" | "Co" | "Os" | "Re" | "Ga" | "Ge" | "Y"
+                | "Ce" | "Pr" | "Nd" | "Sm" | "Eu" | "Gd" | "Tb" | "Dy" | "Ho" | "Th" | "Pa" | "Mo" | "U" | "Tc" | "At"
+                | "Am" | "Bk" | "Cf" | "Cm" | "He" | "Ne" | "Pm" | "Pu" | "Xe"
 
 symbol_single: PRIMITIVE_SINGLE
                 
@@ -1373,8 +1570,10 @@ PRIMITIVE_SINGLE:  "*" | "a" | "A" | "@" | "@@"
                     | "Se" | "Si" | "Sn" | "As" | "Te" | "Pb" | "Zn" | "Cu" | "Fe" | "Mg" | "Na" | "Ca" | "Al"
                     | "K" | "Li" | "Mn" | "Zr" | "Co" | "Ni" | "Cd" | "Ag" | "Au" | "Pt" | "Pd" | "Ru" | "Rh"
                     | "Ir" | "Ti" | "V" | "W" | "Mo" | "Hg" | "Tl" | "Bi" | "Ba" | "Sr" | "Cs" | "Rb" | "Be" | "se" | "te"
+                    | "La" | "Er" | "Tm" | "Yb" | "Lu" | "Hf" | "Ta" | "W" | "Re" | "Co" | "Os" | "Re" | "Ga" | "Ge" | "Y"
+                    | "Ce" | "Pr" | "Nd" | "Sm" | "Eu" | "Gd" | "Tb" | "Dy" | "Ho" | "Th" | "Pa" | "Mo" | "U" | "Tc" | "At"
+                    | "Am" | "Bk" | "Cf" | "Cm" | "He" | "Ne" | "Pm" | "Pu" | "Xe"
 
-                    
 PRIMITIVE_MULTI:  "D" | "H" | "h" | "R" | "r" | "v" | "X" | "x" | "-" | "+" | "#" 
 
 symbol_multi: PRIMITIVE_MULTI
@@ -1399,15 +1598,17 @@ DIGIT: "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
 parser = Lark(grammar, parser="lalr")
 transformer = SMARTSTransformer()
 
-transformer2 = SMARTSTransformer2()  # not used currently
+transformer2 = SMARTSTransformer2()
 
 
-def parse_smarts_total(in_smarts):
-    # not used currently
-    parsed = parser.parse("[$(" + in_smarts + ")]")
+def parse_smarts_total(in_smarts, num_atoms):
+    if in_smarts[0:2] == "[$" and num_atoms == 1:
+        parsed = parser.parse(in_smarts)
+    else:
+        parsed = parser.parse("[$(" + in_smarts + ")]")
+
     atoms_seq, bonds_seq = transformer2.transform(parsed)
     return atoms_seq, bonds_seq
-    # print(atoms_seq, bonds_seq)
 
 
 def recursive_compare(list1, list2):
@@ -1490,6 +1691,8 @@ def order_token_canon(
     in_smarts_token="[!a@H&D2;#7,#6;H;a-3;#7,!O,!#8&!O;#7,!O,!#8&!O++;*;H0]",
     atom_map=None,
     embedding="drugbank",
+    min_num_explicit_hs=None,
+    opt_num_explicit_hs=None,
 ):
     if embedding == "askcos":
         prims = prims1
@@ -1507,8 +1710,37 @@ def order_token_canon(
                 "embedding must be 'askcos', 'pubchem', 'drugbank', 'npatlas', or a dictionary of primitives"
             )
 
+    # print(in_smarts_token)
     sanitized, group_smarts = sanitize_smarts_token(in_smarts_token)
+    # print(sanitized, group_smarts)
     _, _, _, dg, _ = gen_data_structure(sanitized, group_smarts, in_smarts_token, prims)
+
+    # nodes_to_remove = []
+    # for nn_node in dg.nodes:
+        # if dg.nodes[nn_node]["label"] == "#1":
+            # remove
+            # nodes_to_remove.append(nn_node)
+    # for node in nodes_to_remove:
+        # dg.remove_node(node)
+
+    # add "H" + num_explicit_hs to the root node 0
+    # print(dg.edges, [dg.nodes[i] for i in dg.nodes])
+    if min_num_explicit_hs != None and opt_num_explicit_hs==None:
+        dg.add_node(len(dg.nodes), label="H" + str(min_num_explicit_hs))
+        dg.add_edge(len(dg.nodes) - 1, 0)
+    elif min_num_explicit_hs != None and opt_num_explicit_hs != None:
+        dg.add_node(len(dg.nodes), label=",")
+        idx_new = len(dg.nodes) - 1
+        dg.add_edge(idx_new, 0)
+        idx_new_1 = len(dg.nodes)
+        idx_new_2 = len(dg.nodes) + 1
+
+        dg.add_node(idx_new_1, label="H" + str(min_num_explicit_hs))
+        dg.add_edge(idx_new_1, idx_new)
+        dg.add_node(idx_new_2, label="H" + str(opt_num_explicit_hs+min_num_explicit_hs))
+        dg.add_edge(idx_new_2, idx_new)
+    # print(dg.edges, [dg.nodes[i] for i in dg.nodes])
+    # print(dg.nodes, [dg.nodes[i] for i in dg.nodes])
 
     remaining_nodes = []
     for node in dg.nodes():
@@ -1531,6 +1763,8 @@ def order_token_canon(
 
     stack = deque()
     stack.append(0)
+    # print(dg.edges, [dg.nodes[i] for i in dg.nodes])
+    # print(dg.in_edges(0))
 
     weights_in_order = []
     been_sorted = []
@@ -1542,8 +1776,10 @@ def order_token_canon(
         recurse = False
 
         op = dg.nodes[node]["label"]
+        # print("node", node)
         for neighbor in dg.in_edges(node):
             adj = neighbor[0]
+            # print("neh", adj, dg.nodes[adj])
             if "weights" not in dg.nodes[adj]:
                 stack.append(adj)
                 stack.append(node)
@@ -1584,11 +1820,17 @@ def order_token_canon(
             first_atom_index = 0
             pattern = r"#\d+"
             for idx, txt in enumerate(this_text):
+                if "," in txt:
+                    txt = txt.split(",")[0]
+                if ";" in txt:
+                    txt = txt.split(";")[0]
                 if txt in ATOMS or re.match(pattern, txt):
                     first_atom_index = idx
                     break
 
+            # print(this_text, first_atom_index)
             this_text = moveToFront(this_text, first_atom_index)
+            # print(this_text)
             dg.nodes[node]["weights"] = moveToFront(
                 dg.nodes[node]["weights"], first_atom_index
             )
@@ -1598,6 +1840,7 @@ def order_token_canon(
             dg.nodes[node]["text"] = op.join(this_text)
             weights_in_order.append(these_weights)
 
+    # print(dg.nodes)
     if atom_map != None and len(atom_map) > 0:
         return "[" + dg.nodes[0]["text"] + atom_map + "]", weights_in_order[-1], dg
     return "[" + dg.nodes[0]["text"] + "]", weights_in_order[-1], dg

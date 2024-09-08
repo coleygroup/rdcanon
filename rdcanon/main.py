@@ -4,7 +4,7 @@ import re
 from rdcanon.token_parser import (
     order_token_canon,
     recursive_compare,
-    parse_smarts_total
+    parse_smarts_total,
 )
 import rdkit
 from collections import deque
@@ -12,6 +12,8 @@ from rdcanon.askcos_prims import prims as prims1
 import random
 from functools import cmp_to_key
 from rdkit.Chem.rdchem import BondType, BondDir, BondStereo
+from rdkit import RDLogger
+RDLogger.DisableLog("rdApp.*")
 
 bond_value_map = {
     "UNSPECIFIED": 1000,
@@ -86,9 +88,12 @@ class Graph:
         # self.atom_to_original_chiral_tag = {}
 
     def graph_from_smarts(self, smarts, embedding):
-
-
+        proton_mol = Chem.MolFromSmiles("[#1]")
+        
         mol = Chem.MolFromSmarts(smarts)
+        
+        # if Chem.HasQueryHs(mol)[0]:
+            # mol = Chem.AdjustQueryProperties(Chem.MergeQueryHs(mol))
         if not mol:
             raise ValueError("Invalid SMARTS provided")
 
@@ -101,36 +106,40 @@ class Graph:
             print()
             print("token embeddings")
 
+        num_atoms = len(mol.GetAtoms())
+        atoms_seq, bonds_seq = parse_smarts_total(smarts, num_atoms)
 
-        atoms_seq, bonds_seq = parse_smarts_total(smarts)
-        # print(atoms_seq)
-        # print(bonds_seq)
-        # print(len(atoms_seq), len(mol.GetAtoms()))
-        # print()
-
+        old_idx_to_new_idx = {}
+        nnn = 0
         for atom in mol.GetAtoms():
-
-            # if atom.GetChiralTag() != Chem.rdchem.ChiralType.CHI_UNSPECIFIED:
-                # print(atom.GetSmarts(), atoms_seq[atom.GetIdx()], atom.GetChiralTag())
-
-            # self.atom_to_original_chiral_tag[atom.GetIdx()] = atom.GetChiralTag()
-                
             # is it supposed to make sense?
             if "@@" in atoms_seq[atom.GetIdx()]:
                 atom.SetChiralTag(Chem.rdchem.ChiralType.CHI_TETRAHEDRAL_CW)
             elif "@" in atoms_seq[atom.GetIdx()]:
                 atom.SetChiralTag(Chem.rdchem.ChiralType.CHI_TETRAHEDRAL_CCW)
 
-            # print()
-            # if atom.GetChiralTag() != Chem.rdchem.ChiralType.CHI_UNSPECIFIED:
-                # print(atom.GetSmarts(), atoms_seq[atom.GetIdx()], atom.GetChiralTag())
+            if atom.GetSmarts() == "[H]" or atom.GetSmarts() == "[#1]":
+                continue
 
+            min_num_explicit_hs = 0
+            opt_num_explicit_hs = 0
+            for neighbors in atom.GetNeighbors():
+                neigh_sm = Chem.MolFromSmarts(neighbors.GetSmarts())
+                if neighbors.GetSmarts() == "[H]" or neighbors.GetSmarts() == "[#1]":
+                    min_num_explicit_hs += 1
+                elif proton_mol.HasSubstructMatch(neigh_sm):
+                    opt_num_explicit_hs += 1
+
+            if min_num_explicit_hs == 0:
+                min_num_explicit_hs = None
+            if opt_num_explicit_hs == 0:
+                opt_num_explicit_hs = None
 
             node_data = {
                 "smarts": atom.GetSmarts(),
                 "stereo": atom.GetChiralTag(),
             }
-            n = Node(atom.GetIdx(), node_data)
+            n = Node(nnn, node_data)
             atom_map = re.findall(r":\d+]", n.data["smarts"])
 
             if len(atom_map) > 0:
@@ -138,10 +147,16 @@ class Graph:
                     re.sub(r":\d+]", "]", n.data["smarts"]),
                     atom_map[0][0:-1],
                     embedding,
+                    min_num_explicit_hs,
+                    opt_num_explicit_hs
                 )
             else:
                 sm, sc, _ = order_token_canon(
-                    re.sub(r":\d+]", "]", n.data["smarts"]), None, embedding
+                    re.sub(r":\d+]", "]", n.data["smarts"]),
+                    None,
+                    embedding,
+                    min_num_explicit_hs,
+                    opt_num_explicit_hs
                 )
 
             if self.v:
@@ -157,16 +172,25 @@ class Graph:
             n.score_original = 1 / single_score
             n.serialized_score = sc
             n.data["smarts"] = sm
+            old_idx_to_new_idx[atom.GetIdx()] = nnn
+            nnn = nnn + 1
             self.nodes.append(n)
         if self.v:
             print()
 
         rdkit.Chem.rdmolops.FastFindRings(mol)
         rdkit.Chem.rdmolops.FindPotentialStereoBonds(mol)
-
         for bond in mol.GetBonds():
-            start_idx = bond.GetBeginAtomIdx()
-            end_idx = bond.GetEndAtomIdx()
+            if (
+                bond.GetBeginAtomIdx() not in old_idx_to_new_idx
+                or bond.GetEndAtomIdx() not in old_idx_to_new_idx
+            ):
+                continue
+            start_idx_o = bond.GetBeginAtomIdx()
+            end_idx_o = bond.GetEndAtomIdx()
+
+            start_idx = old_idx_to_new_idx[bond.GetBeginAtomIdx()]
+            end_idx = old_idx_to_new_idx[bond.GetEndAtomIdx()]
 
             self.nodes[start_idx].add_bond(
                 self.nodes[end_idx],
@@ -189,32 +213,34 @@ class Graph:
 
             if bond.GetStereo() != Chem.rdchem.BondStereo.STEREONONE:
 
-                atom = mol.GetAtomWithIdx(start_idx)
+                atom = mol.GetAtomWithIdx(start_idx_o)
                 neighbors = atom.GetNeighbors()
 
                 for neighbor in neighbors:
                     if (
                         mol.GetBondBetweenAtoms(
-                            start_idx, neighbor.GetIdx()
+                            start_idx_o, neighbor.GetIdx()
                         ).GetBondDir()
                         == Chem.rdchem.BondDir.ENDUPRIGHT
                         or mol.GetBondBetweenAtoms(
-                            start_idx, neighbor.GetIdx()
+                            start_idx_o, neighbor.GetIdx()
                         ).GetBondDir()
                         == Chem.rdchem.BondDir.ENDDOWNRIGHT
                     ):
                         bond_a = neighbor.GetIdx()
                         break
 
-                atom = mol.GetAtomWithIdx(end_idx)
+                atom = mol.GetAtomWithIdx(end_idx_o)
                 neighbors = atom.GetNeighbors()
 
                 for neighbor in neighbors:
                     if (
-                        mol.GetBondBetweenAtoms(end_idx, neighbor.GetIdx()).GetBondDir()
+                        mol.GetBondBetweenAtoms(
+                            end_idx_o, neighbor.GetIdx()
+                        ).GetBondDir()
                         == Chem.rdchem.BondDir.ENDUPRIGHT
                         or mol.GetBondBetweenAtoms(
-                            end_idx, neighbor.GetIdx()
+                            end_idx_o, neighbor.GetIdx()
                         ).GetBondDir()
                         == Chem.rdchem.BondDir.ENDDOWNRIGHT
                     ):
@@ -269,7 +295,7 @@ class Graph:
                 )
             ]
         )
-
+        nn = 0
         while stack:
             (
                 curr_node,
@@ -283,6 +309,11 @@ class Graph:
                 this_bond_to_sm_idx,
                 this_branch_level,
             ) = stack.popleft()
+            if nn > 10000:
+                raise ValueError(
+                    "Too many iterations, please share SMARTS with us as an issue on github"
+                )
+            nn = nn + 1
             current_node, current_bond, curr_bond_smarts = curr_node
             if len(visited) == len(self.nodes):
                 for r in current_node.bonds:
@@ -331,7 +362,6 @@ class Graph:
                     neighbors_not_visited = neighbors_not_visited + 1
                 else:
                     if r.index != parent_index and parent_index != -1:
-
                         bond_sm = self.bond_indices_to_smarts[
                             (current_node.index, r.index)
                         ]
@@ -635,6 +665,11 @@ class Graph:
             idxes_out.append(node.index)
             i = i + 1
 
+
+        ###           ###
+        ### Fix Bonds ###
+        ###           ###
+
         bonds_set_equal = []
         bonds_set_trans = []
         for bond in tmol.GetBonds():
@@ -657,7 +692,6 @@ class Graph:
                 # print(start_rs, end_rs)
                 for i in start_rs:
                     for j in end_rs:
-                        # print((i,j))
                         all_r_combos.append((i, j))
 
                 # print(self.bond_indices_to_relative_stereo)
@@ -776,7 +810,7 @@ class Graph:
             ]
 
             # if true_stereo != BondStereo.STEREONONE:
-                # true_stereo = BondStereo.STEREOCIS
+            # true_stereo = BondStereo.STEREOCIS
             assigned_stereo = bond.GetStereo()
 
             if true_stereo != assigned_stereo:
@@ -824,6 +858,12 @@ class Graph:
                 ]
                 smarts_in = self.replace_at_index(smarts_in, "/", sm_loc - 1, 1)
 
+        ###    END    ###
+        ### Fix Bonds ###
+        ###           ###
+
+
+
         cw_ord = [0, 1, 2]
         ccw_ord = [0, 2, 1]
 
@@ -842,14 +882,13 @@ class Graph:
                 for nn in atm.GetNeighbors():
                     if "molAtomMapNumber" in nn.GetPropsAsDict():
                         new_bond_indices.append(int(nn.GetProp("molAtomMapNumber")))
-                        # print(self.nodes[nn.GetAtomMapNum()])
                     else:
                         new_bond_indices.append(0)
 
                 if len(old_bonds_indices) == 3:
                     old_bonds_indices.insert(1, -1)
                     new_bond_indices.insert(1, -1)
-                # print(atm.GetAtomMapNum(), self.nodes[atm.GetAtomMapNum()])
+
                 # print("old bonds:", old_bonds_indices)
                 # print("new bonds:", new_bond_indices)
                 if (
@@ -1189,41 +1228,43 @@ class Reaction:
                 if a.GetAtomMapNum() not in self.index_map:
                     self.index_map[a.GetAtomMapNum()] = self.index
                     self.index = self.index + 1
-                replacements[":" + str(a.GetAtomMapNum()) + "]"] = ":" + str(self.index_map[a.GetAtomMapNum()]) + "]"
-            
-            pattern = re.compile("|".join(re.escape(key) for key in replacements.keys()))
+                replacements[":" + str(a.GetAtomMapNum()) + "]"] = (
+                    ":" + str(self.index_map[a.GetAtomMapNum()]) + "]"
+                )
+
+            pattern = re.compile(
+                "|".join(re.escape(key) for key in replacements.keys())
+            )
             result = pattern.sub(lambda match: replacements[match.group(0)], t_sm)
-                    
+
             r["san_smarts"] = result
             if grouped:
                 r["san_smarts"] = "(" + r["san_smarts"] + ")"
-
 
     def split_at_period_not_in_parentheses(self, s):
         parts = []
         current_part = []
         depth = 0  # Track the depth of parentheses nesting
-        
+
         for char in s:
-            if char == '(':
+            if char == "(":
                 depth += 1
-            elif char == ')':
+            elif char == ")":
                 depth -= 1
-            elif char == '.' and depth == 0:
+            elif char == "." and depth == 0:
                 # If we're not inside parentheses, treat the period as a delimiter
-                parts.append(''.join(current_part))
+                parts.append("".join(current_part))
                 current_part = []
                 continue
-            
+
             # Add the current character to the part we're building
             current_part.append(char)
-        
+
         # Add the last part, if there is one
         if current_part:
-            parts.append(''.join(current_part))
-        
-        return parts
+            parts.append("".join(current_part))
 
+        return parts
 
     def canonicalize_template(self):
         k = AllChem.ReactionFromSmarts(self.input_reaction_smarts)
