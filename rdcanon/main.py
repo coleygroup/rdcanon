@@ -92,8 +92,9 @@ class Graph:
         
         mol = Chem.MolFromSmarts(smarts)
         
-        # if Chem.HasQueryHs(mol)[0]:
-            # mol = Chem.AdjustQueryProperties(Chem.MergeQueryHs(mol))
+        if Chem.HasQueryHs(mol)[0]:
+            mol = Chem.AdjustQueryProperties(Chem.MergeQueryHs(mol))
+            # print(Chem.MolToSmarts(mol))
         if not mol:
             raise ValueError("Invalid SMARTS provided")
 
@@ -123,12 +124,12 @@ class Graph:
 
             min_num_explicit_hs = 0
             opt_num_explicit_hs = 0
-            for neighbors in atom.GetNeighbors():
-                neigh_sm = Chem.MolFromSmarts(neighbors.GetSmarts())
-                if neighbors.GetSmarts() == "[H]" or neighbors.GetSmarts() == "[#1]":
-                    min_num_explicit_hs += 1
-                elif proton_mol.HasSubstructMatch(neigh_sm):
-                    opt_num_explicit_hs += 1
+            # for neighbors in atom.GetNeighbors():
+            #     neigh_sm = Chem.MolFromSmarts(neighbors.GetSmarts())
+            #     if neighbors.GetSmarts() == "[H]" or neighbors.GetSmarts() == "[#1]":
+            #         min_num_explicit_hs += 1
+            #     elif proton_mol.HasSubstructMatch(neigh_sm):
+            #         opt_num_explicit_hs += 1
 
             if min_num_explicit_hs == 0:
                 min_num_explicit_hs = None

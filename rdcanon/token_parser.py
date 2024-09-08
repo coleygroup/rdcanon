@@ -1715,16 +1715,26 @@ def order_token_canon(
     # print(sanitized, group_smarts)
     _, _, _, dg, _ = gen_data_structure(sanitized, group_smarts, in_smarts_token, prims)
 
-    # nodes_to_remove = []
-    # for nn_node in dg.nodes:
-        # if dg.nodes[nn_node]["label"] == "#1":
-            # remove
-            # nodes_to_remove.append(nn_node)
-    # for node in nodes_to_remove:
-        # dg.remove_node(node)
+    nodes_to_remove = []
+    for nn_node in dg.nodes:
+        if dg.nodes[nn_node]["label"] == "&":
+            in_nodes = list(dg.in_edges(nn_node))
+            seen = []
+            for nn_in in in_nodes:
+                # print(nn_node, nn_in[0], dg.nodes[nn_in[0]]["label"])
+                if dg.nodes[nn_in[0]]["label"] in seen:
+                    nodes_to_remove.append(nn_in[0])
+                else:
+                    seen.append(dg.nodes[nn_in[0]]["label"])
+    #         # remove
+    #         # nodes_to_remove.append(nn_node)
+    # print()
+    for node in nodes_to_remove:
+        dg.remove_node(node)
 
     # add "H" + num_explicit_hs to the root node 0
     # print(dg.edges, [dg.nodes[i] for i in dg.nodes])
+    # print()
     if min_num_explicit_hs != None and opt_num_explicit_hs==None:
         dg.add_node(len(dg.nodes), label="H" + str(min_num_explicit_hs))
         dg.add_edge(len(dg.nodes) - 1, 0)
