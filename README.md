@@ -53,6 +53,7 @@ from rdcanon import canon_reaction_smarts
 To run all unit tests:
 >python rdcanon_tests.py
 
+note: currently, "TestRecursive.test_validate_recursive_against_database" is expected to fail at: "[#1][C&X3]([#1,#6])=[O&X1] [#1,#6][C&X3;H1,H2]=[O&X1]". This is due to a strange edge case with merging query Hs, explicit hydrogens, and explicit/implicit connections.
 
 
 ### Current Limitations
