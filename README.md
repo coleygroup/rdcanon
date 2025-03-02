@@ -4,20 +4,32 @@
 rdcanon is a package designed for canonicalizing SMARTS and Reaction SMARTS templates. It reorders SMARTS to optimize querying speed. This optimization is invariant of atom mapping.
 
 ## Installation
+>pip install rdcanon
+
+
+### Installing from source
 ### Prerequisites
 - Ensure you have rdkit installed (version > 2023.9.2).
 - The following packages will be installed:
-        'rdkit > 2023.09.1',
-        'matplotlib',
-        'lark',
-        'numpy',
-        'networkx',
-        'scikit-learn', (optional, for kde generation)
-        'ipykernel',
-        'pandas',
-        'openpyxl'
+  
+        rdkit > 2023.09.1
+  
+        matplotlib
+  
+        lark
+  
+        numpy
+  
+        networkx
+  
+        scikit-learn (optional, for kde generation)
+  
+        ipykernel
+  
+        pandas
+  
+        openpyxl
 
-### Steps
 1. Create or activate a virtual environment.
 2. Clone the repository.
 3. Install the package with the command:
