@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rdcanon"
+version = "0.1.2"
+authors = [{ name = "Babak Mahjour", email = "bmahjour@mit.edu" }]
+description = "SMARTS Sanitization/Canonicalization"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "rdkit>2023.09.1",
+    "matplotlib",
+    "lark",
+    "numpy",
+    "networkx",
+    "scikit-learn",
+    "ipykernel",
+    "pandas",
+    "openpyxl",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = { file = "LICENSE" }
+
+[project.urls]
+Homepage = "https://github.com/coleygroup/rdcanon"
+Issues = "https://github.com/coleygroup/rdcanon/issues"
